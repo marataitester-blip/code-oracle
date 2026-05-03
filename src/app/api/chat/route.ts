@@ -12,7 +12,8 @@ export async function POST(req: Request) {
   const { messages } = await req.json();
 
   const result = await streamText({
-    model: openrouter.chat('anthropic/claude-3.5-sonnet'),
+    // Добавлено "as any", чтобы TypeScript пропустил конфликт внутренних типов библиотек
+    model: openrouter.chat('anthropic/claude-3.5-sonnet') as any,
     messages,
     system: "Ты — Senior Full-Stack разработчик. Твоя задача — анализировать, исправлять и писать код для Telegram Mini Apps и ботов. Выдавай код полностью, готовый к деплою. Общайся кратко, по делу.",
   });
