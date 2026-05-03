@@ -2,17 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Темный стиль для скроллбара */
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 10, 10, 12;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+}
+
+/* Красивый тонкий скроллбар в стиле киберпанк */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b; /* Очень темный серый */
+  background: #000;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a; /* Серый посветлее */
-  border-radius: 4px;
+  background: #2d2d2d;
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #4b22b0; /* Фиолетовый акцент при наведении */
 }
