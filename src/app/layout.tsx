@@ -1,5 +1,3 @@
-import "./globals.css"; // Подключает стили Tailwind (если файл есть)
-
 export const metadata = {
   title: "Code-Oracle",
   description: "Облачная Web-IDE и помощник",
