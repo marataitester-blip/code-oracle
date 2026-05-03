@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import CodeAltar from "@/components/CodeAltar";
-import OracleChat from "@/components/OracleChat";
-import FileTree from "@/components/FileTree";
+import CodeAltar from "../components/CodeAltar";
+import OracleChat from "../components/OracleChat";
+import FileTree from "../components/FileTree";
 
 export default function CodeOracle() {
   const [repoInfo, setRepoInfo] = useState({ owner: "", repo: "" });
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState<any[]>([]);
   const [currentCode, setCurrentCode] = useState("// Выбери файл для редактирования");
 
   const loadRepoTree = async () => {
@@ -28,12 +28,12 @@ export default function CodeOracle() {
         <div className="p-4 bg-gray-900 border-b border-gray-800 space-y-2">
           <input 
             placeholder="Владелец (GitHub ID)"
-            className="w-full bg-black border border-gray-700 p-2 text-xs rounded"
+            className="w-full bg-black border border-gray-700 p-2 text-xs rounded text-white"
             onChange={(e) => setRepoInfo({...repoInfo, owner: e.target.value})}
           />
           <input 
             placeholder="Название репозитория"
-            className="w-full bg-black border border-gray-700 p-2 text-xs rounded"
+            className="w-full bg-black border border-gray-700 p-2 text-xs rounded text-white"
             onChange={(e) => setRepoInfo({...repoInfo, repo: e.target.value})}
           />
           <button 
