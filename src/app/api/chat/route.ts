@@ -5,18 +5,34 @@ import { streamText } from 'ai';
 const openrouter = createOpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
-  compatibility: 'strict', // Обязательно для OpenRouter
+  compatibility: 'strict',
 });
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  try {
+    const { messages } = await req.json();
 
-  const result = await streamText({
-    // Добавлено "as any", чтобы TypeScript пропустил конфликт внутренних типов библиотек
-    model: openrouter.chat('anthropic/claude-3.5-sonnet') as any,
-    messages,
-    system: "Ты — Senior Full-Stack разработчик. Твоя задача — анализировать, исправлять и писать код для Telegram Mini Apps и ботов. Выдавай код полностью, готовый к деплою. Общайся кратко, по делу.",
-  });
+    // Используем актуальную модель Gemini 1.5 Pro через OpenRouter
+    // Она лучше справляется с большими объемами кода
+    const modelId = 'google/gemini-pro-1.5'; 
 
-  return result.toDataStreamResponse();
+    const result = await streamText({
+      model: openrouter.chat(modelId) as any,
+      messages,
+      system: `Ты — Senior Full-Stack разработчик и системный архитектор. 
+      Твоя специализация: Telegram Mini Apps, боты и Next.js.
+      Правила:
+      1. Всегда выдавай код файлов ЦЕЛИКОМ.
+      2. Проводи глубокую аналитику на наличие багов.
+      3. Будь краток в объяснениях, фокусируйся на реализации.`,
+    });
+
+    return result.toDataStreamResponse();
+  } catch (error: any) {
+    console.error("ОШИБКА GEMINI-ORACLE:", error);
+    return new Response(JSON.stringify({ error: error.message }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
