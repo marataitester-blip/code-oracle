@@ -1,6 +1,8 @@
+import "./globals.css";
+
 export const metadata = {
-  title: "Code-Oracle",
-  description: "Облачная Web-IDE и помощник",
+  title: "Code-Oracle | IDE",
+  description: "Персональный облачный инструмент разработки",
 };
 
 export default function RootLayout({
@@ -10,7 +12,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ru">
-      <body className="bg-black text-white antialiased">
+      <body className="antialiased selection:bg-purple-500/30">
         {children}
       </body>
     </html>
