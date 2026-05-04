@@ -12,6 +12,7 @@ export default function CodeOracle() {
   const [currentFilePath, setCurrentFilePath] = useState("");
   const [isPushing, setIsPushing] = useState(false);
 
+  // Загрузка дерева файлов
   const loadRepoTree = async () => {
     if (!repoInfo.owner || !repoInfo.repo) return;
     try {
@@ -23,13 +24,25 @@ export default function CodeOracle() {
     }
   };
 
+  // Открытие существующего файла
   const handleFileClick = async (path: string) => {
     setCurrentFilePath(path);
     const res = await fetch(`/api/github/content?owner=${repoInfo.owner}&repo=${repoInfo.repo}&path=${path}`);
     const data = await res.json();
-    if (data.content) setCurrentCode(data.content);
+    if (data.content) {
+        setCurrentCode(data.content);
+    } else {
+        setCurrentCode(`// Не удалось загрузить содержимое. Возможно, это бинарный файл или изображение.`);
+    }
   };
 
+  // Подготовка к созданию нового файла
+  const handleCreateFile = (path: string) => {
+    setCurrentFilePath(path);
+    setCurrentCode(`// Новый файл: ${path}\n// Опиши Оракулу, что здесь должно быть, или напиши код сам.\n// После применения кода нажми "МАТЕРИАЛИЗОВАТЬ (PUSH)".`);
+  };
+
+  // Отправка кода в GitHub
   const handlePush = async () => {
     if (!currentFilePath) return alert("Сначала выбери файл!");
     setIsPushing(true);
@@ -41,10 +54,16 @@ export default function CodeOracle() {
           repo: repoInfo.repo,
           path: currentFilePath,
           content: currentCode,
-          message: "Материализация через Code Oracle"
+          message: `Оракул: обновление ${currentFilePath}`
         }),
       });
-      if (res.ok) alert("Материализация успешна! Код на GitHub.");
+      if (res.ok) {
+          alert("Материализация успешна! Код на GitHub.");
+          loadRepoTree(); // Обновляем дерево, чтобы новый файл появился в списке
+      } else {
+          const err = await res.json();
+          alert(`Ошибка: ${err.error}`);
+      }
     } catch (e) {
       alert("Ошибка материализации");
     } finally {
@@ -76,11 +95,14 @@ export default function CodeOracle() {
         
         <div className="flex-grow flex flex-col overflow-hidden">
             <div className="h-3/5 border-b border-gray-800">
-                {/* Вот здесь мы передаем функцию, из-за отсутствия которой была ошибка */}
                 <OracleChat onApplyCode={(code) => setCurrentCode(code)} />
             </div>
-            <div className="h-2/5 overflow-hidden">
-                <FileTree files={files} onFileClick={handleFileClick} />
+            <div className="h-2/5 overflow-hidden relative">
+                <FileTree 
+                    files={files} 
+                    onFileClick={handleFileClick} 
+                    onCreateFile={handleCreateFile} 
+                />
             </div>
         </div>
       </section>
