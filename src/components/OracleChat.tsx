@@ -1,6 +1,39 @@
+"use client";
 
-const match = text.match(codePattern);
-        return match ? match[1].trim() : null;
+import React, { useRef, useEffect } from "react";
+import { useChat } from "ai/react";
+
+interface OracleChatProps {
+  onApplyCode: (code: string) => void;
+}
+
+export default function OracleChat({ onApplyCode }: OracleChatProps) {
+    const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+        api: '/api/chat',
+    });
+
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Автоматическая прокрутка чата вниз при поступлении новых сообщений
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
+
+    // Безопасное извлечение блока кода из ответа ИИ
+    const extractCode = (text: string) => {
+        if (!text.includes("```")) return null;
+        
+        const parts = text.split("```");
+        if (parts.length >= 3) {
+            const block = parts[1];
+            const firstNewline = block.indexOf('\n');
+            // Отрезаем название языка программирования, если оно есть
+            if (firstNewline !== -1) {
+                return block.substring(firstNewline + 1).trim();
+            }
+            return block.trim();
+        }
+        return null;
     };
 
     return (
