@@ -1,38 +1,27 @@
-import { Octokit } from "octokit";
-import { NextResponse } from "next/server";
+"use client";
 
-export async function POST(req: Request) {
-  try {
-    const { owner, repo, path, content, message } = await req.json();
+import React, { useRef, useEffect } from "react";
+import { useChat } from "ai/react";
 
-    if (!owner || !repo || !path || !content) {
-      return NextResponse.json({ error: "Недостаточно данных для пуша" }, { status: 400 });
-    }
+interface OracleChatProps {
+  onApplyCode: (code: string) => void;
+}
 
-    const octokit = new Octokit({ auth: process.env.GITHUB_PAT });
-
-    // 1. Получаем SHA текущего файла (нужен для обновления)
-    let sha;
-    try {
-      const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path });
-      sha = data.sha;
-    } catch (e) {
-      // Если файла нет, sha останется undefined (создание нового файла)
-    }
-
-    // 2. Отправляем изменения
-    await octokit.rest.repos.createOrUpdateFileContents({
-      owner,
-      repo,
-      path,
-      message: message || "Оракул: автоматическое исправление кода",
-      content: Buffer.from(content).toString("base64"),
-      sha,
+export default function OracleChat({ onApplyCode }: OracleChatProps) {
+    const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+        api: '/api/chat',
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error("Ошибка при пуше в GitHub:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // Автоматическая прокрутка чата вниз при поступлении новых сообщений
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messages]);
+
+    // Извлечение блока кода из ответа ИИ (ищет текст между тройными обратными кавычками)
+    const extractCode = (text: string) => {
+        const match = text.match(/
+http://googleusercontent.com/immersive_entry_chip/0
+
+Сделай Commit этого файла в GitHub. Vercel запустит пересборку, и на этот раз она должна пройти успешно, так как ключевое слово `export default` на месте, а синтаксис полностью корректен.
