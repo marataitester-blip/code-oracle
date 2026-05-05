@@ -16,26 +16,15 @@ export async function GET(req: Request) {
   try {
     const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path });
 
-    // Расширяем проверку: теперь система узнает картинки, видео и аудио
     const isMedia = /\.(png|jpe?g|gif|svg|ico|webp|mp4|webm|ogg|mp3|wav)$/i.test(path);
 
     if (isMedia) {
-      const extension = path.split('.').pop()?.toLowerCase();
-      let mimeType = 'application/octet-stream';
-
-      if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico'].includes(extension || '')) {
-          mimeType = `image/${extension}`;
-      } else if (extension === 'svg') {
-          mimeType = 'image/svg+xml';
-      } else if (['mp4', 'webm', 'ogg'].includes(extension || '')) {
-          mimeType = `video/${extension}`;
-      } else if (['mp3', 'wav'].includes(extension || '')) {
-          mimeType = `audio/${extension}`;
+      // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: 
+      // Если это медиафайл, мы не кодируем его, а берем прямую ссылку (download_url).
+      // Это позволяет мгновенно проигрывать даже самые тяжелые видеофайлы.
+      if (data.download_url) {
+        return NextResponse.json({ imageUrl: data.download_url, isImage: true });
       }
-
-      const imageUrl = `data:${mimeType};base64,${data.content.replace(/\s/g, '')}`;
-      // Возвращаем флаг isImage, чтобы не ломать логику главной страницы
-      return NextResponse.json({ imageUrl, isImage: true });
     }
 
     const content = Buffer.from(data.content, "base64").toString("utf-8");
