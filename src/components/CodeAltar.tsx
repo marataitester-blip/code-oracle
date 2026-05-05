@@ -14,19 +14,19 @@ interface CodeAltarProps {
 export default function CodeAltar({ code, onChange, language = "typescript", isImage, imageUrl }: CodeAltarProps) {
   
   if (isImage && imageUrl) {
-    // Определяем тип медиа по началу Data URL
-    const isVideo = imageUrl.startsWith('data:video');
-    const isAudio = imageUrl.startsWith('data:audio');
+    // Умное определение типа медиа по ссылке из GitHub
+    const isVideo = /\.(mp4|webm|ogg)(?:\?.*)?$/i.test(imageUrl) || imageUrl.startsWith('data:video');
+    const isAudio = /\.(mp3|wav)(?:\?.*)?$/i.test(imageUrl) || imageUrl.startsWith('data:audio');
 
     return (
       <div className="h-full w-full flex items-center justify-center bg-gray-950 p-10 overflow-auto">
-        <div className="relative group flex flex-col items-center">
+        <div className="relative group flex flex-col items-center w-full max-w-4xl">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 rounded-lg"></div>
           
           {isVideo ? (
-            <video controls src={imageUrl} className="max-w-full max-h-[70vh] relative z-10 shadow-2xl border border-gray-800 rounded-lg outline-none" />
+            <video controls src={imageUrl} className="max-w-full max-h-[70vh] w-full relative z-10 shadow-2xl border border-gray-800 rounded-lg outline-none bg-black" />
           ) : isAudio ? (
-            <audio controls src={imageUrl} className="relative z-10 shadow-2xl outline-none mt-10" />
+            <audio controls src={imageUrl} className="relative z-10 shadow-2xl outline-none mt-10 w-full" />
           ) : (
             <img src={imageUrl} alt="Preview" className="max-w-full max-h-[70vh] object-contain relative z-10 shadow-2xl border border-gray-800 rounded-lg" />
           )}
