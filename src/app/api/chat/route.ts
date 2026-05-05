@@ -19,7 +19,8 @@ export async function POST(req: Request) {
     const modelId = 'google/gemini-2.0-flash'; 
 
     const result = await streamText({
-      model: openrouter(modelId),
+      // Используем as any, чтобы обойти строгую проверку типов TypeScript
+      model: openrouter(modelId) as any,
       messages,
       system: `Ты — Senior Full-Stack разработчик. 
       Специализация: Telegram Mini Apps и Next.js.
