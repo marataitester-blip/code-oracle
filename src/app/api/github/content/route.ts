@@ -8,25 +8,30 @@ export async function GET(req: Request) {
   const path = searchParams.get("path");
 
   if (!owner || !repo || !path) {
-    return NextResponse.json({ error: "Недостаточно данных (owner, repo, path)" }, { status: 400 });
+    return NextResponse.json({ error: "Недостаточно данных" }, { status: 400 });
   }
 
   const octokit = new Octokit({ auth: process.env.GITHUB_PAT });
 
   try {
-    // Запрашиваем содержимое файла
-    const { data }: any = await octokit.rest.repos.getContent({
-      owner,
-      repo,
-      path,
-    });
+    const { data }: any = await octokit.rest.repos.getContent({ owner, repo, path });
 
-    // GitHub возвращает контент в кодировке base64, декодируем его в обычный текст
+    // Проверяем расширение файла
+    const isImage = /\.(png|jpe?g|gif|svg|ico|webp)$/i.test(path);
+
+    if (isImage) {
+      // Для изображений возвращаем готовую строку для <img> (Data URL)
+      // GitHub присылает контент в base64, нам просто нужно добавить заголовок
+      const extension = path.split('.').pop()?.toLowerCase();
+      const mimeType = extension === 'svg' ? 'image/svg+xml' : `image/${extension}`;
+      const imageUrl = `data:${mimeType};base64,${data.content.replace(/\s/g, '')}`;
+      return NextResponse.json({ imageUrl, isImage: true });
+    }
+
+    // Для обычного кода декодируем base64 в текст
     const content = Buffer.from(data.content, "base64").toString("utf-8");
-
-    return NextResponse.json({ content });
+    return NextResponse.json({ content, isImage: false });
   } catch (error: any) {
-    console.error("Ошибка при чтении файла:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
