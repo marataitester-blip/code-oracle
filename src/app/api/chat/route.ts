@@ -14,8 +14,8 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    // Точный, рабочий адрес модели в OpenRouter
-    const modelId = 'google/gemini-2.0-flash'; 
+    // Используем стабильную модель
+    const modelId = 'google/gemini-1.5-pro';
 
     const result = await streamText({
       model: openrouter(modelId) as any,
@@ -27,11 +27,19 @@ export async function POST(req: Request) {
 
     return result.toDataStreamResponse();
   } catch (error: any) {
-    console.error("ДЕТАЛИ ОШИБКИ:", error.message || error);
-    
+    console.error("ДЕТАЛИ ОШИБКИ:", error);
+    // Попытка извлечь тело ответа от OpenRouter
+    let details = error.message;
+    if (error.response?.body) {
+      try {
+        const bodyText = await error.response.text();
+        details = bodyText;
+        console.error("Тело ответа OpenRouter:", bodyText);
+      } catch (e) {}
+    }
     return new Response(JSON.stringify({ 
       error: "Ошибка связи с Оракулом", 
-      details: error.message 
+      details 
     }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json' }
