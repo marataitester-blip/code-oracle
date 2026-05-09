@@ -1,32 +1,26 @@
-import { Octokit } from "octokit";
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import { getRepositoryTree } from '@/lib/github';
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const owner = searchParams.get("owner");
-  const repo = searchParams.get("repo");
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const owner = searchParams.get('owner') as string;
+  const repo = searchParams.get('repo') as string;
 
   if (!owner || !repo) {
-    return NextResponse.json({ error: "Нужны владелец и название репозитория" }, { status: 400 });
+    return NextResponse.json({ error: 'Owner and repository are required' }, { status: 400 });
   }
 
-  const octokit = new Octokit({ auth: process.env.GITHUB_PAT });
+  // Проверка наличия токена в окружении
+  if (!process.env.GITHUB_PAT) {
+    console.error('GITHUB_PAT is missing in environment');
+    return NextResponse.json({ error: 'GitHub token not configured' }, { status: 500 });
+  }
 
   try {
-    // 1. Получаем информацию о ветке по умолчанию (обычно main или master)
-    const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-    const defaultBranch = repoData.default_branch;
-
-    // 2. Получаем дерево файлов (рекурсивно)
-    const { data: treeData } = await octokit.rest.git.getTree({
-      owner,
-      repo,
-      tree_sha: defaultBranch,
-      recursive: "true",
-    });
-
-    return NextResponse.json(treeData.tree);
+    const tree = await getRepositoryTree(owner, repo);
+    return NextResponse.json(tree);
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('Error fetching repository tree:', error);
+    return NextResponse.json({ error: error.message || 'Failed to fetch repository tree' }, { status: 500 });
   }
 }
