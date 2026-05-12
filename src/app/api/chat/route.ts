@@ -1,7 +1,6 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { streamText } from 'ai';
 
-// Инициализация клиента OpenRouter с использованием DeepSeek
 const openrouter = createOpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -15,7 +14,9 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    const modelId = 'deepseek/deepseek-v3.2-speciale';
+    // Гарантированно работающая модель через OpenRouter
+    const modelId = 'openai/gpt-4o-mini';
+
     const result = await streamText({
       model: openrouter(modelId) as any,
       messages,
