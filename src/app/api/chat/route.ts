@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    // Гарантированно работающая модель через OpenRouter
+    // Рабочая модель через OpenRouter
     const modelId = 'openai/gpt-4o-mini';
 
     const result = await streamText({
