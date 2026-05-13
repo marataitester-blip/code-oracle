@@ -1,46 +1,42 @@
 import { Octokit } from "octokit";
 
 /**
- * Получение рекурсивного дерева файлов репозитория
- * @param owner - владелец репозитория
- * @param repo - название репозитория
- * @returns список файлов и папок (tree)
+ * Чтение Хроник Акаши: получение полного дерева директорий репозитория.
+ * Позволяет Оракулу окинуть взглядом структуру проекта, прежде чем погружаться в конкретные файлы.
  */
-export async function getRepositoryTree(owner: string, repo: string) {
-  const token = process.env.GITHUB_PAT;
-  if (!token) {
-    throw new Error("GITHUB_PAT is not set in environment variables");
-  }
+export async function fetchRepositoryTree(token: string, owner: string, repo: string, branch: string = "main") {
+    // Инициация связи через Personal Access Token
+    const octokit = new Octokit({ auth: token });
 
-  const octokit = new Octokit({ auth: token });
+    try {
+        // Шаг 1: Находим текущее состояние (голову) ветки
+        const { data: refData } = await octokit.rest.git.getRef({
+            owner,
+            repo,
+            ref: `heads/${branch}`,
+        });
+        const commitSha = refData.object.sha;
 
-  // 1. Получаем информацию о репозитории, чтобы узнать ветку по умолчанию
-  const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
-  const defaultBranch = repoData.default_branch;
+        // Шаг 2: Погружаемся в структуру коммита
+        const { data: commitData } = await octokit.rest.git.getCommit({
+            owner,
+            repo,
+            commit_sha: commitSha,
+        });
+        const treeSha = commitData.tree.sha;
 
-  // 2. Получаем SHA последнего коммита ветки по умолчанию
-  const { data: refData } = await octokit.rest.git.getRef({
-    owner,
-    repo,
-    ref: `heads/${defaultBranch}`,
-  });
-  const commitSha = refData.object.sha;
+        // Шаг 3: Рекурсивно извлекаем всё Древо (файлы и папки)
+        const { data: treeData } = await octokit.rest.git.getTree({
+            owner,
+            repo,
+            tree_sha: treeSha,
+            recursive: "true", // Глубокое сканирование всех уровней
+        });
 
-  // 3. Получаем дерево коммита
-  const { data: commitData } = await octokit.rest.git.getCommit({
-    owner,
-    repo,
-    commit_sha: commitSha,
-  });
-  const treeSha = commitData.tree.sha;
-
-  // 4. Рекурсивно получаем дерево файлов
-  const { data: treeData } = await octokit.rest.git.getTree({
-    owner,
-    repo,
-    tree_sha: treeSha,
-    recursive: "true",
-  });
-
-  return treeData.tree;
+        // Возвращаем чистую структуру для анализа Оракулом
+        return treeData.tree;
+    } catch (error) {
+        console.error("Теневое искажение при попытке прочитать Хроники GitHub:", error);
+        throw error;
+    }
 }
