@@ -8,9 +8,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
-    const octokit = new Octokit({ auth: process.env.GITHUB_PAT });
+    const token = process.env.GITHUB_PAT;
+    if (!token) {
+      return NextResponse.json({ error: "GitHub token not configured" }, { status: 500 });
+    }
 
-    // Получаем текущий SHA файла (если файл существует)
+    const octokit = new Octokit({ auth: token });
+
     let sha = undefined;
     try {
       const { data: existingFile } = await octokit.rest.repos.getContent({
@@ -19,7 +23,6 @@ export async function POST(req: Request) {
       sha = (existingFile as any).sha;
     } catch (e: any) {
       if (e.status !== 404) throw e;
-      // файла нет – sha останется undefined, создадим новый
     }
 
     const { data } = await octokit.rest.repos.createOrUpdateFileContents({
