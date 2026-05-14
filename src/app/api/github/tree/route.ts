@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getRepositoryTree } from '@/lib/github';
+import { fetchRepositoryTree } from '@/lib/github';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -10,14 +10,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Owner and repository are required' }, { status: 400 });
   }
 
-  // Проверка наличия токена в окружении
-  if (!process.env.GITHUB_PAT) {
-    console.error('GITHUB_PAT is missing in environment');
+  const token = process.env.GITHUB_PAT;
+  if (!token) {
     return NextResponse.json({ error: 'GitHub token not configured' }, { status: 500 });
   }
 
   try {
-    const tree = await getRepositoryTree(owner, repo);
+    const tree = await fetchRepositoryTree(token, owner, repo, "main");
     return NextResponse.json(tree);
   } catch (error: any) {
     console.error('Error fetching repository tree:', error);
