@@ -1,20 +1,17 @@
-import "./globals.css";
+// pages/_app.js
 
-export const metadata = {
-  title: "Code-Oracle | IDE",
-  description: "Персональный облачный инструмент разработки",
-};
+import '../styles/globals.css';
+import BottomNavigation from '../components/BottomNavigation';
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function MyApp({ Component, pageProps }) {
   return (
-    <html lang="ru">
-      <body className="antialiased selection:bg-purple-500/30">
-        {children}
-      </body>
-    </html>
+    <div className="appContainer">
+      <main className="content">
+        <Component {...pageProps} />
+      </main>
+      <BottomNavigation />
+    </div>
   );
 }
+
+export default MyApp;
