@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 interface FileEntry {
   path: string;
@@ -76,7 +76,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, onCreateFile })
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Имя нового файла (напр. src/components/MyComponent.tsx)"
+                placeholder="Имя нового файла"
                 className="flex-grow p-2 bg-gray-700 text-white border border-gray-600 rounded"
                 value={newFileName}
                 onChange={(e) => setNewFileName(e.target.value)}
