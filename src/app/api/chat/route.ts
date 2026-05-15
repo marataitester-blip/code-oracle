@@ -14,9 +14,9 @@ export async function POST(req: Request) {
   try {
     const { messages } = await req.json();
 
-    // Рабочая модель через OpenRouter
-    const modelId = 'openai/gpt-4o-mini';
-
+    // 🎯 Модель зафиксирована на GPT-4o (через OpenRouter)
+    const modelId = 'openai/gpt-4o'; 
+    
     const result = await streamText({
       model: openrouter(modelId) as any,
       messages,
