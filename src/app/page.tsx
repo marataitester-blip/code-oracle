@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import CodeAltar from "../components/CodeAltar";
 import OracleChat from "../components/OracleChat";
