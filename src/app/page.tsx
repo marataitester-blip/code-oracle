@@ -18,7 +18,7 @@ interface RouteEntry {
   path: string;
 }
 
-// --- КОМПОНЕНТ FileTree (Компактная навигация по структуре) ---
+// --- КОМПОНЕНТ FileTree (Компактная навигация) ---
 interface FileTreeProps {
   files: FileEntry[];
   onFileClick: (path: string) => void;
@@ -49,7 +49,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
       <ul className="ml-2 border-l border-emerald-900/20 pl-2 mt-1 space-y-1">
         {Object.keys(folders).sort().map(folderName => (
           <li key={folderName} className="text-gray-400 text-[10px] font-mono">
-            <span className="text-emerald-700 font-bold opacity-60 cursor-default select-none">📁 {folderName}</span>
+            <span className="text-emerald-700 font-bold opacity-60">📁 {folderName}</span>
             {renderTree(pathPrefix ? `${pathPrefix}/${folderName}` : folderName, folders[folderName])}
           </li>
         ))}
@@ -69,7 +69,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
   return (
     <div className="w-full h-full bg-[#080808] p-3 overflow-y-auto no-scrollbar">
       <h2 className="text-[9px] font-bold text-gray-700 uppercase tracking-widest mb-3 select-none italic opacity-50">Архитектура Проекта</h2>
-      {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-[9px]">Ожидание репозитория...</p>}
+      {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-[9px]">Ожидание...</p>}
     </div>
   );
 };
@@ -87,7 +87,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   
-  // Визор (Параметры обзора)
+  // Визор
   const [zoom, setZoom] = useState(0.8);
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -99,7 +99,8 @@ export default function App() {
   const [currentRoute, setCurrentRoute] = useState('');
   const [appRoutes, setAppRoutes] = useState<RouteEntry[]>([{ label: "🏠 Главная", path: "" }]);
 
-  const LIVE_VIEW_URL = "[https://living-tarot.vercel.app/](https://living-tarot.vercel.app/)";
+  // ИСПРАВЛЕНО: Чистая ссылка без артефактов
+  const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Скролл чата
@@ -107,7 +108,7 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // --- МЕТОД ЗЕРКАЛА (Синхронизация Визора и Хроник) ---
+  // МЕТОД ЗЕРКАЛА (Связь Визора и Хроник)
   useEffect(() => {
     if (!isConnected || files.length === 0) return;
     const targetPath = currentRoute === "" ? "src/app/page.tsx" : `src/app/${currentRoute}/page.tsx`;
@@ -117,7 +118,7 @@ export default function App() {
     }
   }, [currentRoute, isConnected]);
 
-  // Авто-сканер структуры страниц
+  // Авто-сканер страниц
   useEffect(() => {
     if (files.length === 0) return;
     const generated: RouteEntry[] = [];
@@ -139,7 +140,7 @@ export default function App() {
       const data = await res.json();
       setFileContent(data.content || '');
     } catch (e) {
-      console.error("Ошибка чтения файла:", e);
+      console.error(e);
     } finally {
       setIsLoading(false);
     }
@@ -163,8 +164,9 @@ export default function App() {
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', text: "Сбой Оракула. Проверьте OPENROUTER_API_KEY." }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: "Ошибка связи с Оракулом." }]);
     } finally {
+      setIsLoading(true); // Сохраняем визуальное состояние до конца парсинга
       setIsLoading(false);
     }
   };
@@ -179,28 +181,25 @@ export default function App() {
         body: JSON.stringify({ owner, repo, path: activeFile, content: fileContent })
       });
       if (res.ok) {
-        alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА. ПРОВЕРЬТЕ ЭКРАН ЧЕРЕЗ 1-2 МИНУТЫ.');
+        alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА');
         setIframeKey(k => k + 1);
-      } else {
-        alert('Сбой материализации. Проверьте права GitHub PAT.');
       }
-    } catch (e) {
-      alert('Ошибка соединения!');
+    } catch (err) {
+      alert('Ошибка записи!');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const extractCodeFromText = (text: string) => {
+  // Механика захвата кода из текста Оракула
+  const extractCode = (text: string) => {
     if (!text.includes('```')) return null;
-    const firstIndex = text.indexOf('```');
-    const lastIndex = text.lastIndexOf('```');
-    if (firstIndex !== lastIndex) {
-      let code = text.substring(firstIndex + 3, lastIndex);
-      // Отрезаем метку языка (react, ts, etc)
-      const firstLineEnd = code.indexOf('\n');
-      if (firstLineEnd !== -1 && firstLineEnd < 15 && !code.substring(0, firstLineEnd).includes('import')) {
-        code = code.substring(firstLineEnd + 1);
+    const parts = text.split('```');
+    if (parts.length >= 3) {
+      let code = parts[1];
+      const firstNewline = code.indexOf('\n');
+      if (firstNewline !== -1 && firstNewline < 15 && !code.substring(0, firstNewline).includes('import')) {
+        code = code.substring(firstNewline + 1);
       }
       return code.trim();
     }
@@ -210,29 +209,29 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
       
-      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ */}
+      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ (Инженерный пульт) */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-850">
         
-        {/* Header */}
-        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0 shadow-lg">
-          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1.5 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all" />
+        {/* Шапка */}
+        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0">
+          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all" />
           <button onClick={() => {
               setIsLoading(true);
               fetch(`/api/repo?owner=${owner}&repo=${repo}`)
                 .then(r => r.json()).then(d => { setFiles(d); setIsConnected(true); })
                 .finally(() => setIsLoading(false));
-          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-2 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest shadow-inner">Подключить проект</button>
+          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-1.5 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest">Подключить проект</button>
           {isConnected && <span className="text-emerald-500 font-mono text-[10px] animate-pulse font-bold">● LIVE</span>}
         </div>
 
         {/* Рабочая зона */}
         <div className="flex-grow flex min-h-0 overflow-hidden">
           {/* Хроники */}
-          <div className="w-[180px] h-full flex-shrink-0 border-r border-gray-800">
+          <div className="w-[180px] h-full flex-shrink-0 border-r border-gray-800 bg-[#080808]">
             <FileTree files={files} onFileClick={handleFileClick} activeFile={activeFile} />
           </div>
           
-          {/* ЧАТ ОРАКУЛА */}
+          {/* ЧАТ */}
           <div className="flex-grow flex flex-col bg-[#070707] min-w-0">
             <div className="flex-grow overflow-y-auto p-4 space-y-6 no-scrollbar">
               {messages.length === 0 && (
@@ -242,19 +241,19 @@ export default function App() {
                 </div>
               )}
               {messages.map((msg, i) => {
-                const codeToApply = msg.role === 'assistant' ? extractCodeFromText(msg.text) : null;
+                const codeToApply = msg.role === 'assistant' ? extractCode(msg.text) : null;
                 return (
                   <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in duration-300`}>
                     <span className="text-[8px] text-gray-600 mb-1 font-bold uppercase tracking-widest">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
-                    <div className={`p-4 rounded-2xl text-base font-mono border ${msg.role === 'user' ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300' : 'bg-[#0f0f0f] border-gray-800 text-gray-200'} max-w-[95%] shadow-xl leading-relaxed`}>
+                    <div className={`p-4 rounded-2xl text-base font-mono border shadow-2xl ${msg.role === 'user' ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300' : 'bg-[#0f0f0f] border-gray-800 text-gray-200'} max-w-[95%] leading-relaxed`}>
                       {msg.text}
                       {codeToApply && (
                         <button 
                           onClick={() => { 
                             setFileContent(codeToApply); 
-                            alert("КОД УСПЕШНО ПЕРЕДАН В БУФЕР");
+                            alert("КОД ПЕРЕДАН В БУФЕР");
                           }} 
-                          className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-95"
+                          className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-xl active:scale-95"
                         >
                           Применить код в буфер
                         </button>
@@ -266,19 +265,19 @@ export default function App() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Ввод (Оптимизированная высота) */}
+            {/* Ввод */}
             <div className="p-4 bg-[#0d0d0d] border-t border-gray-800 shadow-2xl">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Опишите задачу..."
-                className="w-full p-4 bg-black border border-gray-700 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner placeholder:text-gray-800"
+                placeholder="Запрос..."
+                className="w-full p-4 bg-black border border-gray-700 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner leading-relaxed placeholder:text-gray-800"
               />
               <div className="flex justify-between items-center mt-3">
                  <span className="text-[9px] text-yellow-600/50 font-mono truncate max-w-[50%] italic select-none">
                     {activeFile ? `Фокус: ${activeFile.split('/').pop()}` : 'Выберите файл в Хрониках'}
                  </span>
-                 <button onClick={handleSendMessage} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-black px-10 py-2.5 rounded-xl text-[10px] font-bold uppercase transition-all active:scale-95 disabled:opacity-50 tracking-widest">Отправить</button>
+                 <button onClick={handleSendMessage} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-black px-10 py-2.5 rounded-xl text-[10px] font-bold uppercase transition-all active:scale-95 disabled:opacity-50 tracking-widest shadow-lg">Отправить</button>
               </div>
             </div>
           </div>
@@ -289,14 +288,14 @@ export default function App() {
           <div className="px-4 py-1.5 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center shadow-md">
             <span className="text-[9px] text-gray-600 uppercase font-bold tracking-widest">Буфер материализации</span>
             {activeFile && (
-              <button onClick={handlePush} className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse">МАТЕРИАЛИЗОВАТЬ (PUSH)</button>
+              <button onClick={handlePush} className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse">PUSH В GITHUB</button>
             )}
           </div>
           <textarea 
             value={fileContent} 
             onChange={(e) => setFileContent(e.target.value)} 
             className="flex-grow p-3 bg-[#030303] text-gray-500 font-mono text-[9px] outline-none resize-none no-scrollbar cursor-default leading-tight" 
-            placeholder="Ожидание кода из чата..."
+            placeholder="Ожидание кода..."
           />
         </div>
       </div>
@@ -332,7 +331,7 @@ export default function App() {
           </div>
           <div className="flex items-center justify-between px-2 bg-black rounded-lg border border-gray-800 h-8 shadow-inner">
             <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="text-gray-600 hover:text-white px-2 text-sm font-bold">-</button>
-            <span className="text-[9px] font-mono text-gray-300 min-w-[30px] text-center">{Math.round(zoom*100)}%</span>
+            <span className="text-[9px] font-mono text-gray-300 min-w-[30px] text-center font-bold">{Math.round(zoom*100)}%</span>
             <button onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} className="text-gray-600 hover:text-white px-2 text-sm font-bold">+</button>
             <button onClick={() => {setPan({x:0, y:0}); setZoom(0.8);}} className="text-emerald-500 ml-2 text-[10px] hover:scale-125 transition-transform" title="Центрировать">⌖</button>
           </div>
@@ -352,11 +351,11 @@ export default function App() {
               className={`flex flex-col shadow-[0_0_150px_rgba(0,0,0,1)] border-[#1a1a1a] transition-all duration-500 ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[3px] rounded-2xl w-[1280px] h-[720px]'}`} 
               style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}
             >
-              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-8 flex justify-center z-20 pointer-events-none"><div className="w-32 h-6 bg-[#0a0a0a] rounded-b-2xl border-x border-b border-white/5 shadow-2xl"></div></div>}
+              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-8 flex justify-center z-20 pointer-events-none"><div className="w-32 h-6 bg-[#0a0a0a] rounded-b-2xl border border-white/5 shadow-2xl"></div></div>}
               <iframe 
                 key={`${viewMode}-${currentRoute}-${iframeKey}`} 
                 src={`${LIVE_VIEW_URL}${currentRoute}`} 
-                className={`w-full flex-grow border-none bg-black transition-opacity duration-1000 ${viewMode === 'mobile' ? 'pt-4' : ''}`} 
+                className="w-full flex-grow border-none bg-black transition-opacity duration-1000" 
                 sandbox="allow-scripts allow-same-origin allow-forms" 
               />
             </div>
