@@ -1,39 +1,41 @@
-import { createOpenAI } from '@ai-sdk/openai';
-import { streamText } from 'ai';
+import { NextResponse } from 'next/server';
 
-const openrouter = createOpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-  headers: {
-    "HTTP-Referer": "https://code-oracle.vercel.app",
-    "X-Title": "Code Oracle",
+export const dynamic = "force-dynamic";
+
+export async function POST(request: Request) {
+  const { prompt, fileContext } = await request.json();
+  // Используем ключ, который ты добавил в Vercel
+  const apiKey = process.env.OPENROUTER_API_KEY || ""; 
+
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Gemini API Key is missing in Vercel' }, { status: 500 });
   }
-});
 
-export async function POST(req: Request) {
+  const contextMessage = fileContext 
+    ? `\nТЕКУЩИЙ КОД ФАЙЛА (${fileContext.path}):\n${fileContext.content}\n` 
+    : "";
+
+  const systemInstruction = `Вы — Code Oracle. 
+Помогайте инженеру в разработке "Живого Таро". 
+Выдавайте код ТОЛЬКО ПОЛНЫМИ ФАЙЛАМИ. 
+Никаких сокращений и комментариев вместо кода.`;
+
   try {
-    const { messages } = await req.json();
-
-    // 🎯 Модель зафиксирована на GPT-4o (через OpenRouter)
-    const modelId = 'openai/gpt-4o'; 
-    
-    const result = await streamText({
-      model: openrouter(modelId) as any,
-      messages,
-      system: `Ты — Senior Full-Stack разработчик. 
-      Специализация: Telegram Mini Apps и Next.js.
-      Всегда пиши код файлов ЦЕЛИКОМ. Будь краток.`,
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: contextMessage + prompt }] }],
+        systemInstruction: { parts: [{ text: systemInstruction }] }
+      })
     });
 
-    return result.toDataStreamResponse();
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Gemini Error');
+
+    const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Оракул задумался...";
+    return NextResponse.json({ response: aiText });
   } catch (error: any) {
-    console.error("ДЕТАЛИ ОШИБКИ:", error);
-    return new Response(JSON.stringify({ 
-      error: "Ошибка связи с Оракулом", 
-      details: error.message 
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
