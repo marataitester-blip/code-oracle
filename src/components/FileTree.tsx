@@ -25,73 +25,55 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, onCreateFile })
     }
   };
 
-  const renderTree = (pathPrefix: string, currentFiles: FileEntry[]) => {
-    const folders: { [key: string]: FileEntry[] } = {};
-    const fileList: FileEntry[] = [];
-
-    currentFiles.forEach(file => {
-      const relativePath = pathPrefix ? file.path.substring(pathPrefix.length + 1) : file.path;
-      const parts = relativePath.split('/');
-
-      if (parts.length > 1) {
-        const folderName = parts[0];
-        if (!folders[folderName]) {
-          folders[folderName] = [];
-        }
-        folders[folderName].push(file);
-      } else {
-        fileList.push(file);
-      }
-    });
-
-    return (
-      <ul className="ml-4">
-        {Object.keys(folders).sort().map(folderName => (
-          <li key={folderName} className="text-blue-400">
-            <strong>📁 {folderName}</strong>
-            {renderTree(`${pathPrefix}${pathPrefix ? '/' : ''}${folderName}`, folders[folderName])}
-          </li>
-        ))}
-        {fileList.sort((a, b) => a.path.localeCompare(b.path)).map(file => (
-          <li key={file.path} className="text-gray-300 hover:text-white cursor-pointer" onClick={() => onFileClick(file.path)}>
-            📄 {file.path.split('/').pop()}
-          </li>
-        ))}
-      </ul>
-    );
-  };
+  // ИНЖЕНЕРНЫЙ ФИКС: Оставляем ТОЛЬКО реальные файлы (blob), жестко отсекаем папки (tree)
+  const justFiles = files.filter(f => f.type === 'blob');
 
   return (
-    <div className="w-full bg-gray-800 p-4 overflow-y-auto border-r border-gray-700 h-full">
-      <h2 className="text-xl font-bold mb-4 text-white">Древо файлов</h2>
-      {files.length > 0 && (
-        <div className="mb-4">
+    <div className="w-full bg-gray-900 p-4 overflow-y-auto border-r border-gray-800 h-full">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-sm font-bold text-gray-300 uppercase tracking-widest">Радар Файлов</h2>
+        <button
+          onClick={() => setShowNewFileInput(!showNewFileInput)}
+          className="text-emerald-400 hover:text-emerald-300 font-bold text-xl px-2"
+          title="Создать файл"
+        >
+          +
+        </button>
+      </div>
+
+      {showNewFileInput && (
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            placeholder="Путь (напр: app/page.tsx)"
+            className="flex-grow p-2 bg-black text-emerald-400 border border-gray-700 rounded text-xs outline-none focus:border-emerald-500"
+            value={newFileName}
+            onChange={(e) => setNewFileName(e.target.value)}
+          />
           <button
-            onClick={() => setShowNewFileInput(!showNewFileInput)}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mb-2"
+            onClick={handleCreateFile}
+            className="bg-emerald-900/50 hover:bg-emerald-800 text-emerald-400 font-bold py-1 px-3 rounded border border-emerald-800"
           >
-            + НОВЫЙ ФАЙЛ
+            ✓
           </button>
-          {showNewFileInput && (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Имя нового файла"
-                className="flex-grow p-2 bg-gray-700 text-white border border-gray-600 rounded"
-                value={newFileName}
-                onChange={(e) => setNewFileName(e.target.value)}
-              />
-              <button
-                onClick={handleCreateFile}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
-              >
-                Создать
-              </button>
-            </div>
-          )}
         </div>
       )}
-      {files.length > 0 ? renderTree('', files) : <p className="text-gray-400">Подключитесь к репозиторию для просмотра файлов.</p>}
+
+      {files.length > 0 ? (
+        <ul className="space-y-2 overflow-x-hidden">
+          {justFiles.sort((a, b) => a.path.localeCompare(b.path)).map(file => (
+            <li 
+              key={file.path} 
+              className="text-gray-400 hover:text-emerald-400 cursor-pointer text-xs font-mono break-all" 
+              onClick={() => onFileClick(file.path)}
+            >
+              📄 {file.path}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-gray-600 text-xs text-center mt-10">Хроники не подключены</p>
+      )}
     </div>
   );
 };
