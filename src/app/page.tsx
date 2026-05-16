@@ -248,6 +248,12 @@ export default function Home() {
     }
   };
 
+  // Функция возврата камеры точно в центр (исправлено: восстановлено в коде)
+  const centerView = () => {
+    setPan({ x: 0, y: 0 });
+    setZoom(0.8);
+  };
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -380,7 +386,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ПРАВАЯ ЧАСТЬ: Визор (Симулятор) */}
+      {/* ПРАВАЯ ЧАСТЬ: Визор (Симулятор) --- */}
       <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
         {/* НАВИГАТОР МАРШРУТОВ (NAV) */}
