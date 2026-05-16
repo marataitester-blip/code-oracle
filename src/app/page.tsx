@@ -18,7 +18,7 @@ interface RouteEntry {
   path: string;
 }
 
-// --- КОМПОНЕНТ FileTree (Компактная навигация) ---
+// --- КОМПОНЕНТ FileTree (Компактная навигация по структуре) ---
 interface FileTreeProps {
   files: FileEntry[];
   onFileClick: (path: string) => void;
@@ -49,7 +49,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
       <ul className="ml-2 border-l border-emerald-900/20 pl-2 mt-1 space-y-1">
         {Object.keys(folders).sort().map(folderName => (
           <li key={folderName} className="text-gray-400 text-[10px] font-mono">
-            <span className="text-emerald-700 font-bold opacity-60">📁 {folderName}</span>
+            <span className="text-emerald-700 font-bold opacity-60 cursor-default select-none">📁 {folderName}</span>
             {renderTree(pathPrefix ? `${pathPrefix}/${folderName}` : folderName, folders[folderName])}
           </li>
         ))}
@@ -69,7 +69,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
   return (
     <div className="w-full h-full bg-[#080808] p-3 overflow-y-auto no-scrollbar">
       <h2 className="text-[9px] font-bold text-gray-700 uppercase tracking-widest mb-3 select-none italic opacity-50">Архитектура Проекта</h2>
-      {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-[9px]">Ожидание...</p>}
+      {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-[9px]">Ожидание репозитория...</p>}
     </div>
   );
 };
@@ -87,7 +87,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   
-  // Визор
+  // Визор (Параметры обзора)
   const [zoom, setZoom] = useState(0.8);
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -99,7 +99,6 @@ export default function App() {
   const [currentRoute, setCurrentRoute] = useState('');
   const [appRoutes, setAppRoutes] = useState<RouteEntry[]>([{ label: "🏠 Главная", path: "" }]);
 
-  // ИСПРАВЛЕНО: Чистая ссылка без артефактов
   const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +107,7 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // МЕТОД ЗЕРКАЛА (Связь Визора и Хроник)
+  // --- МЕТОД ЗЕРКАЛА (Связь Визора и Хроник) ---
   useEffect(() => {
     if (!isConnected || files.length === 0) return;
     const targetPath = currentRoute === "" ? "src/app/page.tsx" : `src/app/${currentRoute}/page.tsx`;
@@ -118,7 +117,7 @@ export default function App() {
     }
   }, [currentRoute, isConnected]);
 
-  // Авто-сканер страниц
+  // Авто-сканер структуры страниц
   useEffect(() => {
     if (files.length === 0) return;
     const generated: RouteEntry[] = [];
@@ -138,9 +137,10 @@ export default function App() {
     try {
       const res = await fetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка загрузки файла');
       setFileContent(data.content || '');
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      alert(`Ошибка чтения: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -162,11 +162,11 @@ export default function App() {
         })
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка чата');
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', text: "Ошибка связи с Оракулом." }]);
+    } catch (e: any) {
+      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой: ${e.message}. Проверьте OPENROUTER_API_KEY.` }]);
     } finally {
-      setIsLoading(true); // Сохраняем визуальное состояние до конца парсинга
       setIsLoading(false);
     }
   };
@@ -180,26 +180,32 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner, repo, path: activeFile, content: fileContent })
       });
+      
+      const data = await res.json();
+      
       if (res.ok) {
-        alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА');
+        alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА. Пересборка Живого Таро запущена.');
         setIframeKey(k => k + 1);
+      } else {
+        // Выводим детальную ошибку из логов сервера прямо на экран
+        alert(`СБОЙ МАТЕРИАЛИЗАЦИИ (Error 500): ${data.error || 'Неизвестная ошибка сервера'}. Проверьте GITHUB_PAT в Vercel.`);
       }
-    } catch (err) {
-      alert('Ошибка записи!');
+    } catch (e: any) {
+      alert(`Критическая ошибка соединения: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Механика захвата кода из текста Оракула
-  const extractCode = (text: string) => {
+  const extractCodeFromText = (text: string) => {
     if (!text.includes('```')) return null;
-    const parts = text.split('```');
-    if (parts.length >= 3) {
-      let code = parts[1];
-      const firstNewline = code.indexOf('\n');
-      if (firstNewline !== -1 && firstNewline < 15 && !code.substring(0, firstNewline).includes('import')) {
-        code = code.substring(firstNewline + 1);
+    const firstIndex = text.indexOf('```');
+    const lastIndex = text.lastIndexOf('```');
+    if (firstIndex !== lastIndex) {
+      let code = text.substring(firstIndex + 3, lastIndex);
+      const firstLineEnd = code.indexOf('\n');
+      if (firstLineEnd !== -1 && firstLineEnd < 15 && !code.substring(0, firstLineEnd).includes('import')) {
+        code = code.substring(firstLineEnd + 1);
       }
       return code.trim();
     }
@@ -209,18 +215,19 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
       
-      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ (Инженерный пульт) */}
+      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-850">
         
-        {/* Шапка */}
-        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0">
-          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all" />
+        {/* Header */}
+        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0 shadow-lg">
+          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1.5 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all" />
           <button onClick={() => {
               setIsLoading(true);
               fetch(`/api/repo?owner=${owner}&repo=${repo}`)
                 .then(r => r.json()).then(d => { setFiles(d); setIsConnected(true); })
+                .catch(e => alert(`Ошибка подключения: ${e.message}`))
                 .finally(() => setIsLoading(false));
-          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-1.5 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest">Подключить проект</button>
+          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-2 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest">Подключить проект</button>
           {isConnected && <span className="text-emerald-500 font-mono text-[10px] animate-pulse font-bold">● LIVE</span>}
         </div>
 
@@ -231,7 +238,7 @@ export default function App() {
             <FileTree files={files} onFileClick={handleFileClick} activeFile={activeFile} />
           </div>
           
-          {/* ЧАТ */}
+          {/* ЧАТ ОРАКУЛА */}
           <div className="flex-grow flex flex-col bg-[#070707] min-w-0">
             <div className="flex-grow overflow-y-auto p-4 space-y-6 no-scrollbar">
               {messages.length === 0 && (
@@ -241,19 +248,19 @@ export default function App() {
                 </div>
               )}
               {messages.map((msg, i) => {
-                const codeToApply = msg.role === 'assistant' ? extractCode(msg.text) : null;
+                const codeToApply = msg.role === 'assistant' ? extractCodeFromText(msg.text) : null;
                 return (
                   <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in duration-300`}>
                     <span className="text-[8px] text-gray-600 mb-1 font-bold uppercase tracking-widest">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
-                    <div className={`p-4 rounded-2xl text-base font-mono border shadow-2xl ${msg.role === 'user' ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300' : 'bg-[#0f0f0f] border-gray-800 text-gray-200'} max-w-[95%] leading-relaxed`}>
+                    <div className={`p-4 rounded-2xl text-base font-mono border ${msg.role === 'user' ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300' : 'bg-[#0f0f0f] border-gray-800 text-gray-200'} max-w-[95%] shadow-xl leading-relaxed`}>
                       {msg.text}
                       {codeToApply && (
                         <button 
                           onClick={() => { 
                             setFileContent(codeToApply); 
-                            alert("КОД ПЕРЕДАН В БУФЕР");
+                            alert("КОД УСПЕШНО ПЕРЕДАН В БУФЕР МАТЕРИАЛИЗАЦИИ");
                           }} 
-                          className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-xl active:scale-95"
+                          className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-95"
                         >
                           Применить код в буфер
                         </button>
@@ -270,8 +277,8 @@ export default function App() {
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Запрос..."
-                className="w-full p-4 bg-black border border-gray-700 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner leading-relaxed placeholder:text-gray-800"
+                placeholder="Опишите задачу..."
+                className="w-full p-4 bg-black border border-gray-700 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner placeholder:text-gray-800"
               />
               <div className="flex justify-between items-center mt-3">
                  <span className="text-[9px] text-yellow-600/50 font-mono truncate max-w-[50%] italic select-none">
@@ -288,7 +295,13 @@ export default function App() {
           <div className="px-4 py-1.5 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center shadow-md">
             <span className="text-[9px] text-gray-600 uppercase font-bold tracking-widest">Буфер материализации</span>
             {activeFile && (
-              <button onClick={handlePush} className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse">PUSH В GITHUB</button>
+              <button 
+                onClick={handlePush} 
+                disabled={isLoading}
+                className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse disabled:opacity-50"
+              >
+                {isLoading ? 'ПРОЦЕСС...' : 'МАТЕРИАЛИЗОВАТЬ (PUSH)'}
+              </button>
             )}
           </div>
           <textarea 
