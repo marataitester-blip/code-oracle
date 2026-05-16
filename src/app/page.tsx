@@ -12,7 +12,7 @@ interface Message {
   text: string;
 }
 
-// --- КОМПОНЕНТ FileTree (Встроен для надежности сборки) ---
+// --- КОМПОНЕНТ FileTree (Встроен для надежности сборки и устранения ошибок импорта) ---
 interface FileTreeProps {
   files: FileEntry[];
   onFileClick: (path: string) => void;
@@ -54,7 +54,7 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, onCreateFile })
       <ul className="ml-3 border-l border-gray-800 pl-2 mt-1 space-y-1">
         {Object.keys(folders).sort().map(folderName => (
           <li key={folderName} className="text-gray-300 text-[10px] font-mono mt-1">
-            <span className="text-emerald-500 font-bold opacity-80">📁 {folderName}</span>
+            <span className="text-emerald-500 font-bold opacity-80 select-none">📁 {folderName}</span>
             {renderTree(pathPrefix ? `${pathPrefix}/${folderName}` : folderName, folders[folderName])}
           </li>
         ))}
@@ -74,27 +74,41 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, onCreateFile })
   return (
     <div className="w-full bg-[#0a0a0a] p-3 overflow-y-auto border-r border-gray-800 h-full flex flex-col no-scrollbar">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest italic">Хроники Проекта</h2>
-        <button onClick={() => setShowNewFileInput(!showNewFileInput)} className="text-emerald-400 hover:text-emerald-300 font-bold text-lg">+</button>
+        <h2 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest italic select-none">Хроники Проекта</h2>
+        <button 
+          onClick={() => setShowNewFileInput(!showNewFileInput)} 
+          className="text-emerald-400 hover:text-emerald-300 font-bold text-lg transition-transform active:scale-90"
+        >
+          +
+        </button>
       </div>
       {showNewFileInput && (
-        <div className="flex gap-1 mb-4">
+        <div className="flex gap-1 mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
           <input
             type="text"
             placeholder="Путь/Файл.tsx"
-            className="flex-grow p-1.5 bg-black text-emerald-400 border border-gray-800 rounded text-[10px] outline-none"
+            className="flex-grow p-1.5 bg-black border border-gray-800 rounded text-[10px] text-emerald-400 outline-none focus:border-emerald-600 transition-colors"
             value={newFileName}
             onChange={(e) => setNewFileName(e.target.value)}
           />
-          <button onClick={handleCreateFile} className="bg-emerald-900/30 text-emerald-400 px-2 rounded">✓</button>
+          <button onClick={handleCreateFile} className="bg-emerald-900/30 text-emerald-400 px-2 rounded hover:bg-emerald-800/50 transition-colors">✓</button>
         </div>
       )}
-      <div className="flex-grow overflow-y-auto">{justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-700 text-[9px] text-center mt-10">Проект не в сети</p>}</div>
+      <div className="flex-grow overflow-y-auto no-scrollbar">
+        {justFiles.length > 0 ? (
+          renderTree('', justFiles)
+        ) : (
+          <div className="text-center mt-10 space-y-2">
+            <p className="text-gray-700 text-[9px] uppercase tracking-widest">Проект не в сети</p>
+            <p className="text-gray-800 text-[8px] italic">Нажмите "Подключить Хроники" выше</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
 
-// --- ГЛАВНЫЙ ЭКРАН ПУЛЬТА ---
+// --- ГЛАВНЫЙ ЭКРАН ПУЛЬТА (KILLER CURSOR) ---
 export default function Home() {
   const [owner] = useState('marataitester-blip');
   const [repo, setRepo] = useState('Living-Tarot');
@@ -120,7 +134,7 @@ export default function Home() {
 
   const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
 
-  // Директивы для ИИ (Кодекс)
+  // Директивы для ИИ (Кодекс Архитектора)
   const CODE_ORACLE_DIRECTIVES = `
 [СИСТЕМНЫЙРЕГЛАМЕНТДЛЯОРАКУЛА]:
 1. Выдавай файлы ИСКЛЮЧИТЕЛЬНО целиком. Никаких сокращений.
@@ -129,7 +143,7 @@ export default function Home() {
 4. ПУТИ ИЗОБРАЖЕНИЙ: Используй абсолютные пути от корня (напр. '/cards/ace.png').
 `;
 
-  // Реактивность советов
+  // Реактивность советов в зависимости от контекста
   useEffect(() => {
     if (!isConnected) return;
     if (!activeFile) {
@@ -143,15 +157,19 @@ export default function Home() {
     else setAdvice(`💡 Оракул: Работаем с ${activeFile.split('/').pop()}. Не забывайте про нелинейную структуру связей.`);
   }, [activeFile, isConnected]);
 
+  // Улучшенный парсинг ответов с диагностикой 404
   const safeJsonParse = async (response: Response, url: string) => {
     const text = await response.text();
     if (!response.ok) {
-        throw new Error(`Ошибка API (${url}): Сервер вернул код ${response.status}. Возможно, Vercel требует пересборки (Redeploy) после настройки токена.`);
+        if (response.status === 404) {
+            throw new Error(`Ошибка 404: Файл '${url}' не найден на сервере. Пожалуйста, убедитесь, что вы создали API-роуты в папке src/app/api/ в вашем GitHub.`);
+        }
+        throw new Error(`Ошибка API (${url}): Сервер вернул код ${response.status}. Возможно, Vercel требует пересборки (Redeploy).`);
     }
     try {
       return JSON.parse(text);
     } catch (e) {
-      throw new Error(`Сбой протокола на ${url}. Получен HTML вместо данных. Проверьте переменные окружения GITHUB_PAT.`);
+      throw new Error(`Сбой протокола на ${url}. Получен HTML вместо данных. Это верный признак отсутствия API-файлов в проекте.`);
     }
   };
 
@@ -254,26 +272,50 @@ export default function Home() {
       {/* ЛЕВАЯ ЧАСТЬ: Мастерская */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-850 z-20 bg-[#050505]">
         
+        {/* Панель управления Хрониками */}
         <div className="p-2 bg-[#0d0d0d] border-b border-gray-850 flex gap-2 items-center flex-shrink-0">
-          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-800 rounded px-2 py-1 text-[10px] text-emerald-400 w-1/3 outline-none" />
-          <button onClick={fetchRepoStructure} disabled={isLoading} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-3 py-1 rounded uppercase disabled:opacity-50 tracking-tighter">Подключить Хроники</button>
-          {isConnected && <span className="text-[9px] text-emerald-500 font-mono animate-pulse">● LIVE</span>}
+          <input 
+            type="text" 
+            value={repo} 
+            onChange={(e) => setRepo(e.target.value)} 
+            className="bg-black border border-gray-800 rounded px-2 py-1 text-[10px] text-emerald-400 w-1/3 outline-none focus:border-emerald-600 transition-colors" 
+          />
+          <button 
+            onClick={fetchRepoStructure} 
+            disabled={isLoading} 
+            className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-3 py-1 rounded uppercase disabled:opacity-50 tracking-tighter hover:bg-emerald-900 transition-colors"
+          >
+            {isLoading ? 'Загрузка...' : 'Подключить Хроники'}
+          </button>
+          {isConnected && <span className="text-[9px] text-emerald-500 font-mono animate-pulse select-none">● LIVE</span>}
         </div>
 
         <div className="flex-grow flex overflow-hidden">
-          <div className="w-1/4 h-full border-r border-gray-850">
-            <FileTree files={files} onFileClick={handleFileClick} onCreateFile={(f) => { setActiveFile(f); setFileContent('// Новая структура\n'); setFiles(prev => [...prev, {path: f, type:'blob'}]); }} />
+          {/* Дерево файлов */}
+          <div className="w-1/4 h-full border-r border-gray-850 bg-[#080808]">
+            <FileTree 
+              files={files} 
+              onFileClick={handleFileClick} 
+              onCreateFile={(f) => { 
+                setActiveFile(f); 
+                setFileContent('// Новая структура архитектуры Живого Таро\n'); 
+                setFiles(prev => [...prev, {path: f, type:'blob'}]); 
+              }} 
+            />
           </div>
           
+          {/* Чат и Инженерный терминал */}
           <div className="w-3/4 h-full flex flex-col bg-[#070707]">
-            <div className="flex-grow overflow-y-auto p-3 space-y-3 no-scrollbar">
+            <div className="flex-grow overflow-y-auto p-3 space-y-4 no-scrollbar">
               {messages.length === 0 && (
-                 <div className="text-gray-600 text-[10px] text-center mt-20 opacity-50 uppercase tracking-[0.2em]">Система готова к деструктуризации</div>
+                 <div className="text-gray-700 text-[10px] text-center mt-20 opacity-40 uppercase tracking-[0.3em] select-none">
+                   Система готова к деструктуризации
+                 </div>
               )}
               {messages.map((msg, i) => (
-                <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                   <span className="text-[8px] text-gray-600 mb-1 uppercase font-mono">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
-                   <div className={`p-2 rounded text-[11px] font-mono border ${msg.role === 'user' ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-400' : 'bg-gray-900 border-gray-850 text-gray-300'} max-w-[95%] shadow-sm`}>
+                <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in duration-300`}>
+                   <span className="text-[8px] text-gray-600 mb-1 uppercase font-mono tracking-widest">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
+                   <div className={`p-3 rounded-lg text-[11px] font-mono border ${msg.role === 'user' ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300' : 'bg-gray-900 border-gray-850 text-gray-300'} max-w-[95%] shadow-lg leading-relaxed`}>
                     {msg.text}
                     {msg.role === 'assistant' && msg.text.includes(codeBlockMarker) && (
                       <button 
@@ -282,9 +324,9 @@ export default function Home() {
                           const match = msg.text.match(regex); 
                           if(match) setFileContent(match[1]); 
                         }} 
-                        className="mt-2 block w-full bg-emerald-900/40 hover:bg-emerald-800/50 py-1 rounded text-[9px] font-bold uppercase transition-colors"
+                        className="mt-3 block w-full bg-emerald-900/40 hover:bg-emerald-800/60 py-2 rounded text-[9px] font-bold uppercase transition-all active:scale-95 border border-emerald-700/30"
                       >
-                        Применить код в буфер
+                        Применить код в буфер материализации
                       </button>
                     )}
                   </div>
@@ -292,37 +334,59 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mx-3 mb-1 p-2 bg-yellow-950/5 border border-yellow-900/20 rounded text-[10px] text-yellow-600/80 font-mono italic">
+            {/* РЕАКТИВНЫЙ СОВЕТ ОРАКУЛА */}
+            <div className="mx-3 mb-1 p-2 bg-yellow-950/5 border border-yellow-900/20 rounded-md text-[10px] text-yellow-600/80 font-mono italic shadow-inner">
               {advice}
             </div>
 
+            {/* ТЕРМИНАЛ ЗАПРОСОВ (Промпт) */}
             <div className="p-3 bg-[#0d0d0d] border-t border-gray-850 flex flex-col gap-2">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Опишите желаемое изменение..."
-                className="w-full p-3 bg-black border border-gray-800 rounded text-xs outline-none focus:border-emerald-600 resize-none h-56 text-gray-300 no-scrollbar shadow-inner leading-relaxed"
+                placeholder="Опишите изменение (например: 'Создай страницу реферальной системы')..."
+                className="w-full p-4 bg-black border border-gray-800 rounded-lg text-sm outline-none focus:border-emerald-700 resize-none h-56 text-gray-300 no-scrollbar shadow-inner leading-relaxed transition-all"
               />
-              <button onClick={handleSendMessage} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-black px-4 py-2 rounded text-[10px] font-bold uppercase self-end transition-all active:scale-95 shadow-lg">Генерировать структуру</button>
+              <button 
+                onClick={handleSendMessage} 
+                disabled={isLoading} 
+                className="bg-emerald-600 hover:bg-emerald-500 text-black px-6 py-2.5 rounded-lg text-[11px] font-bold uppercase self-end transition-all active:scale-95 shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+              >
+                {isLoading ? 'Генерация...' : 'Генерировать структуру'}
+              </button>
             </div>
           </div>
         </div>
 
+        {/* БУФЕР МАТЕРИАЛИЗАЦИИ (Код) */}
         <div className="h-24 border-t border-gray-850 flex flex-col bg-black">
-          <div className="px-2 py-1 bg-[#0d0d0d] border-b border-gray-850 flex justify-between items-center">
-            <span className="text-[9px] text-gray-500 font-mono italic truncate">{activeFile || 'Буфер материализации пуст'}</span>
-            {activeFile && <button onClick={handlePushToGitHub} className="text-emerald-500 font-bold text-[9px] uppercase hover:text-emerald-400 transition-colors">Материализовать в GitHub</button>}
+          <div className="px-3 py-1.5 bg-[#0d0d0d] border-b border-gray-850 flex justify-between items-center">
+            <span className="text-[9px] text-gray-500 font-mono italic truncate max-w-[70%]">{activeFile || 'Буфер материализации пуст'}</span>
+            {activeFile && (
+              <button 
+                onClick={handlePushToGitHub} 
+                className="text-emerald-500 font-bold text-[9px] uppercase hover:text-emerald-400 transition-colors tracking-widest animate-pulse"
+              >
+                Материализовать в GitHub
+              </button>
+            )}
           </div>
-          <textarea value={fileContent} onChange={(e) => setFileContent(e.target.value)} className="flex-grow p-2 bg-black text-gray-800 font-mono text-[9px] outline-none resize-none no-scrollbar cursor-default" readOnly />
+          <textarea 
+            value={fileContent} 
+            onChange={(e) => setFileContent(e.target.value)} 
+            className="flex-grow p-3 bg-black text-gray-800 font-mono text-[9px] outline-none resize-none no-scrollbar cursor-default leading-tight" 
+            readOnly 
+          />
         </div>
       </div>
 
-      {/* ПРАВАЯ ЧАСТЬ: Визор */}
+      {/* ПРАВАЯ ЧАСТЬ: Визор (Симулятор) */}
       <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
-        <div className="p-2 bg-[#0d0d0d] border-b border-gray-850 flex items-center gap-2 z-20">
-          <div className="flex-grow flex items-center bg-black border border-gray-800 rounded px-2 py-1">
-            <span className="text-[9px] text-gray-600 font-bold mr-1 italic">NAV:</span>
+        {/* НАВИГАТОР МАРШРУТОВ (NAV) */}
+        <div className="p-2 bg-[#0d0d0d] border-b border-gray-850 flex items-center gap-2 z-20 shadow-lg">
+          <div className="flex-grow flex items-center bg-black border border-gray-800 rounded px-3 py-1.5 transition-all focus-within:border-emerald-800">
+            <span className="text-[9px] text-gray-600 font-bold mr-2 italic select-none">NAV:</span>
             <span className="text-[9px] text-emerald-900 mr-1 select-none">living-tarot.vercel.app/</span>
             <input 
               type="text" 
@@ -332,37 +396,58 @@ export default function Home() {
               className="bg-transparent text-emerald-400 text-[10px] font-mono outline-none flex-grow"
             />
           </div>
-          <button onClick={() => setIframeKey(k => k+1)} className="text-[9px] text-gray-500 hover:text-white transition-colors">🔄</button>
+          <button 
+            onClick={() => setIframeKey(k => k+1)} 
+            className="text-[12px] text-gray-500 hover:text-emerald-500 transition-all hover:rotate-180 duration-500"
+            title="Перезагрузить визор"
+          >
+            🔄
+          </button>
         </div>
 
-        <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-md border border-gray-800 p-2 rounded-lg flex flex-col gap-2 shadow-2xl">
-          <div className="flex border border-gray-800 rounded overflow-hidden">
-            <button onClick={() => setViewMode('mobile')} className={`px-2 py-1 text-[8px] uppercase font-bold ${viewMode === 'mobile' ? 'bg-emerald-900 text-emerald-400' : 'text-gray-600'}`}>Mob</button>
-            <button onClick={() => setViewMode('desktop')} className={`px-2 py-1 text-[8px] uppercase font-bold border-l border-gray-800 ${viewMode === 'desktop' ? 'bg-emerald-900 text-emerald-400' : 'text-gray-600'}`}>PC</button>
+        {/* ПУЛЬТ ВИЗОРА (Плавающая панель) */}
+        <div className="absolute bottom-8 left-8 z-40 bg-[#0d0d0d]/90 backdrop-blur-xl border border-gray-800 p-2.5 rounded-2xl flex flex-col gap-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] pointer-events-auto border-t-white/5">
+          <div className="flex bg-black border border-gray-800 rounded-xl overflow-hidden shadow-inner">
+            <button onClick={() => setViewMode('mobile')} className={`px-3 py-1.5 text-[9px] font-bold uppercase transition-all ${viewMode === 'mobile' ? 'bg-emerald-900/50 text-emerald-400 shadow-inner' : 'text-gray-600 hover:text-gray-400'}`}>Mob</button>
+            <button onClick={() => setViewMode('desktop')} className={`px-3 py-1.5 text-[9px] font-bold uppercase border-l border-gray-800 transition-all ${viewMode === 'desktop' ? 'bg-emerald-900/50 text-emerald-400 shadow-inner' : 'text-gray-600 hover:text-gray-400'}`}>PC</button>
           </div>
-          <div className="flex border border-gray-800 rounded overflow-hidden">
-            <button onClick={() => setIsPanMode(false)} className={`px-2 py-1 text-[8px] uppercase font-bold ${!isPanMode ? 'bg-emerald-900 text-emerald-400' : 'text-gray-600'}`}>Курсор</button>
-            <button onClick={() => setIsPanMode(true)} className={`px-2 py-1 text-[8px] uppercase font-bold border-l border-gray-800 ${isPanMode ? 'bg-emerald-900 text-emerald-400' : 'text-gray-600'}`}>Рука [Spc]</button>
+          <div className="flex bg-black border border-gray-800 rounded-xl overflow-hidden shadow-inner">
+            <button onClick={() => setIsPanMode(false)} className={`px-3 py-1.5 text-[9px] font-bold uppercase transition-all ${!isPanMode ? 'bg-emerald-900/50 text-emerald-400 shadow-inner' : 'text-gray-600 hover:text-gray-400'}`}>Курсор</button>
+            <button onClick={() => setIsPanMode(true)} className={`px-3 py-1.5 text-[9px] font-bold uppercase border-l border-gray-800 transition-all ${isPanMode ? 'bg-emerald-900/50 text-emerald-400 shadow-inner' : 'text-gray-600 hover:text-gray-400'}`}>Рука</button>
           </div>
-          <div className="flex items-center justify-between px-1 bg-black rounded border border-gray-800">
-            <button onClick={() => setZoom(z => z - 0.1)} className="text-gray-600 hover:text-white px-1">-</button>
-            <span className="text-[8px] font-mono text-gray-400 px-1">{Math.round(zoom*100)}%</span>
-            <button onClick={() => setZoom(z => z + 0.1)} className="text-gray-600 hover:text-white px-1">+</button>
-            <button onClick={() => {setPan({x:0, y:0}); setZoom(0.8);}} className="text-emerald-500 ml-1 text-[10px]">⌖</button>
+          <div className="flex items-center justify-between px-2 bg-black rounded-xl border border-gray-800 shadow-inner h-8">
+            <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="text-gray-600 hover:text-white px-2 transition-colors font-bold">-</button>
+            <span className="text-[9px] font-mono text-gray-400 min-w-[30px] text-center">{Math.round(zoom*100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} className="text-gray-600 hover:text-white px-2 transition-colors font-bold">+</button>
+            <button onClick={centerView} className="text-emerald-500 ml-1 text-[11px] hover:scale-125 transition-transform" title="Вернуть в центр">⌖</button>
           </div>
         </div>
 
+        {/* ХОЛСТ СИМУЛЯТОРА */}
         <div 
-          className={`flex-grow bg-[#0a0a0a] relative overflow-hidden ${isPanMode ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+          className={`flex-grow bg-[#0c0c0c] relative overflow-hidden transition-colors ${isPanMode ? (isDragging ? 'cursor-grabbing scale-[0.99]' : 'cursor-grab') : ''}`}
           onMouseDown={(e) => { if(isPanMode) { setIsDragging(true); setDragStart({x: e.clientX - pan.x, y: e.clientY - pan.y}); } }}
           onMouseMove={(e) => { if(isDragging && isPanMode) setPan({x: e.clientX - dragStart.x, y: e.clientY - dragStart.y}); }}
           onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => setIsDragging(false)}
         >
           {isPanMode && <div className="absolute inset-0 z-30 bg-transparent" />}
           <div className="absolute top-1/2 left-1/2" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
-            <div className={`flex flex-col shadow-[0_0_100px_rgba(0,0,0,0.8)] transition-all ${viewMode === 'mobile' ? 'bg-black rounded-[2.5rem] border-[10px] border-gray-900 w-[390px] h-[844px]' : 'bg-black border border-gray-800 rounded-lg w-[1280px] h-[720px]'}`} style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}>
-              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20"><div className="w-32 h-6 bg-gray-900 rounded-b-2xl shadow-inner"></div></div>}
-              <iframe key={`${viewMode}-${currentRoute}-${iframeKey}`} src={`${LIVE_VIEW_URL}${currentRoute}`} className={`w-full flex-grow border-none bg-black ${viewMode === 'mobile' ? 'pt-2' : ''}`} sandbox="allow-scripts allow-same-origin allow-forms" />
+            <div 
+              className={`flex flex-col shadow-[0_0_120px_rgba(0,0,0,0.9)] transition-all duration-300 border-[#1a1a1a] ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[2px] rounded-2xl w-[1280px] h-[720px]'}`} 
+              style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}
+            >
+              {viewMode === 'mobile' && (
+                <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none">
+                  <div className="w-36 h-6 bg-[#0a0a0a] rounded-b-3xl border-x border-b border-white/5 shadow-2xl"></div>
+                </div>
+              )}
+              <iframe 
+                key={`${viewMode}-${currentRoute}-${iframeKey}`} 
+                src={`${LIVE_VIEW_URL}${currentRoute}`} 
+                className={`w-full flex-grow border-none bg-black transition-opacity duration-700 ${viewMode === 'mobile' ? 'pt-2' : ''}`} 
+                sandbox="allow-scripts allow-same-origin allow-forms" 
+              />
             </div>
           </div>
         </div>
