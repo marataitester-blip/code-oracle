@@ -303,20 +303,20 @@ export default function App() {
                     {msg.role === 'assistant' && msg.text.includes(codeBlockMarker) && (
                       <button 
                         onClick={() => { 
-                          // УСИЛЕННЫЙ ПАРСЕР КОДА (МЕТОД СЕПАРАЦИИ)
+                          // --- УСИЛЕННЫЙ ПАРСЕР КОДА (МЕТОД СЕПАРАЦИИ) ---
                           const parts = msg.text.split(codeBlockMarker);
                           if (parts.length >= 3) {
-                              // Берем всё, что между первым и последним блоком кавычек
+                              // Берем контент между первым и последним вхождением маркера
                               let rawCode = parts[1];
-                              // Отрезаем первую строку, если там название языка (react, typescript и т.д.)
                               const lines = rawCode.split('\n');
-                              if (lines.length > 1 && lines[0].trim().length < 15 && !lines[0].includes(' ') && !lines[0].includes('import')) {
+                              // Отрезаем метку языка программирования (например: react, ts, typescript)
+                              if (lines.length > 0 && lines[0].trim().length < 15 && !lines[0].includes(' ') && !lines[0].includes('import')) {
                                   rawCode = lines.slice(1).join('\n');
                               }
                               setFileContent(rawCode.trim()); 
-                              alert("ИНФОРМАЦИЯ ПЕРЕДАНА В БУФЕР МАТЕРИАЛИЗАЦИИ");
+                              alert("КОД ПЕРЕДАН В БУФЕР МАТЕРИАЛИЗАЦИИ");
                           } else {
-                              alert("Оракул выдал неполный код. Попросите его повторить ответ целиком.");
+                              alert("Оракул прислал неполный или некорректный формат кода. Повторите запрос.");
                           }
                         }} 
                         className="mt-6 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-4 rounded-xl text-base font-bold uppercase transition-all active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.3)]"
@@ -347,7 +347,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* БУФЕР МАТЕРИАЛИЗАЦИИ (Textarea внизу) */}
+        {/* БУФЕР МАТЕРИАЛИЗАЦИИ (Нижнее поле) */}
         <div className="h-64 border-t border-gray-800 flex flex-col bg-black shadow-2xl">
           <div className="px-5 py-3 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center">
             <span className="text-sm text-gray-500 font-mono truncate italic select-none">Буфер материализации: <span className="text-emerald-500">{activeFile || 'Пусто'}</span></span>
@@ -364,7 +364,7 @@ export default function App() {
             value={fileContent} 
             onChange={(e) => setFileContent(e.target.value)} 
             className="flex-grow p-6 bg-[#030303] text-gray-400 font-mono text-sm outline-none resize-none no-scrollbar cursor-default leading-relaxed" 
-            placeholder="Здесь появится код после нажатия 'Применить код в буфер' в чате..."
+            placeholder="Код появится здесь после нажатия 'Применить код в буфер'..."
           />
         </div>
       </div>
@@ -389,7 +389,7 @@ export default function App() {
           <button onClick={() => setIframeKey(k => k+1)} className="text-2xl text-gray-600 hover:text-white transition-all hover:rotate-180 duration-700 p-3" title="Обновить экран">🔄</button>
         </div>
 
-        {/* --- КОМПАКТНАЯ ПАНЕЛЬ ВИЗОРА (В 4 раза меньше) --- */}
+        {/* --- КОМПАКТНАЯ ПАНЕЛЬ ВИЗОРА (Уменьшена в 4 раза) --- */}
         <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-xl border border-gray-800 p-2 rounded-xl flex flex-col gap-2 shadow-[0_15px_40px_rgba(0,0,0,0.8)] pointer-events-auto border-t-white/5">
           <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden shadow-inner p-0.5">
             <button onClick={() => setViewMode('mobile')} className={`flex-grow px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-md ${viewMode === 'mobile' ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-500'}`}>Mob</button>
@@ -418,10 +418,10 @@ export default function App() {
           {isPanMode && <div className="absolute inset-0 z-30 bg-transparent" />}
           <div className="absolute top-1/2 left-1/2" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
             <div 
-              className={`flex flex-col shadow-[0_0_120px_rgba(0,0,0,1)] border-[#1a1a1a] transition-all duration-300 ${viewMode === 'mobile' ? 'bg-black rounded-[4rem] border-[14px] w-[390px] h-[844px]' : 'bg-black border-[3px] rounded-2xl w-[1280px] h-[720px]'}`} 
+              className={`flex flex-col shadow-[0_0_120px_rgba(0,0,0,1)] border-[#1a1a1a] transition-all duration-300 ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[2px] rounded-2xl w-[1280px] h-[720px]'}`} 
               style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}
             >
-              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-8 flex justify-center z-20 pointer-events-none"><div className="w-40 h-8 bg-[#0a0a0a] rounded-b-[2rem] border-x border-b border-white/10 shadow-2xl"></div></div>}
+              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none"><div className="w-36 h-6 bg-[#0a0a0a] rounded-b-3xl border-x border-b border-white/5 shadow-2xl"></div></div>}
               <iframe 
                 key={`${viewMode}-${currentRoute}-${iframeKey}`} 
                 src={`${LIVE_VIEW_URL}${currentRoute}`} 
