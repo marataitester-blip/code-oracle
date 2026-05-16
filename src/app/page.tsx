@@ -18,7 +18,7 @@ interface RouteEntry {
   path: string;
 }
 
-// --- КОМПОНЕНТ FileTree (Компактная навигация) ---
+// --- КОМПОНЕНТ FileTree (Компактная навигация по структуре) ---
 interface FileTreeProps {
   files: FileEntry[];
   onFileClick: (path: string) => void;
@@ -49,14 +49,14 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
       <ul className="ml-2 border-l border-emerald-900/20 pl-2 mt-1 space-y-1">
         {Object.keys(folders).sort().map(folderName => (
           <li key={folderName} className="text-gray-400 text-[10px] font-mono">
-            <span className="text-emerald-700 font-bold opacity-60">📁 {folderName}</span>
+            <span className="text-emerald-700 font-bold opacity-60 cursor-default select-none">📁 {folderName}</span>
             {renderTree(pathPrefix ? `${pathPrefix}/${folderName}` : folderName, folders[folderName])}
           </li>
         ))}
         {currentLevelFiles.sort((a, b) => a.path.localeCompare(b.path)).map(file => (
           <li 
             key={file.path} 
-            className={`cursor-pointer text-[10px] font-mono py-0.5 break-all transition-all hover:text-emerald-400 ${activeFile === file.path ? 'text-emerald-300 font-bold bg-emerald-900/20' : 'text-gray-600'}`} 
+            className={`cursor-pointer text-[10px] font-mono py-0.5 break-all transition-all hover:text-emerald-400 ${activeFile === file.path ? 'text-emerald-300 font-bold bg-emerald-900/20 px-1' : 'text-gray-600'}`} 
             onClick={() => onFileClick(file.path)}
           >
             📄 {file.path.split('/').pop()}
@@ -68,13 +68,13 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
 
   return (
     <div className="w-full h-full bg-[#080808] p-3 overflow-y-auto no-scrollbar">
-      <h2 className="text-[9px] font-bold text-gray-700 uppercase tracking-widest mb-3 select-none italic">Архитектура</h2>
-      {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-[9px]">Пусто</p>}
+      <h2 className="text-[9px] font-bold text-gray-700 uppercase tracking-widest mb-3 select-none italic opacity-50">Архитектура Проекта</h2>
+      {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-[9px]">Ожидание репозитория...</p>}
     </div>
   );
 };
 
-// --- ГЛАВНЫЙ ЭКРАН ПУЛЬТА ---
+// --- ГЛАВНЫЙ ЭКРАН ПУЛЬТА (Киллер Курсора) ---
 export default function App() {
   const [owner] = useState('marataitester-blip');
   const [repo, setRepo] = useState('Living-Tarot');
@@ -87,7 +87,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   
-  // Визор
+  // Визор (Параметры обзора)
   const [zoom, setZoom] = useState(0.8);
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -95,11 +95,11 @@ export default function App() {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [isPanMode, setIsPanMode] = useState(false);
 
-  // Маршруты
+  // Маршруты (NAV)
   const [currentRoute, setCurrentRoute] = useState('');
   const [appRoutes, setAppRoutes] = useState<RouteEntry[]>([{ label: "🏠 Главная", path: "" }]);
 
-  const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
+  const LIVE_VIEW_URL = "[https://living-tarot.vercel.app/](https://living-tarot.vercel.app/)";
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Скролл чата
@@ -107,15 +107,17 @@ export default function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // МЕТОД ЗЕРКАЛА (Связь Визора и Редактора)
+  // --- МЕТОД ЗЕРКАЛА (Синхронизация Визора и Хроник) ---
   useEffect(() => {
     if (!isConnected || files.length === 0) return;
     const targetPath = currentRoute === "" ? "src/app/page.tsx" : `src/app/${currentRoute}/page.tsx`;
     const found = files.find(f => f.path === targetPath);
-    if (found && activeFile !== found.path) handleFileClick(found.path);
+    if (found && activeFile !== found.path) {
+        handleFileClick(found.path);
+    }
   }, [currentRoute, isConnected]);
 
-  // Сканер страниц
+  // Авто-сканер структуры страниц
   useEffect(() => {
     if (files.length === 0) return;
     const generated: RouteEntry[] = [];
@@ -136,8 +138,11 @@ export default function App() {
       const res = await fetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
       const data = await res.json();
       setFileContent(data.content || '');
-    } catch (e) { console.error(e); }
-    finally { setIsLoading(false); }
+    } catch (e) {
+      console.error("Ошибка чтения файла:", e);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -158,8 +163,10 @@ export default function App() {
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', text: "Сбой Оракула." }]);
-    } finally { setIsLoading(false); }
+      setMessages(prev => [...prev, { role: 'assistant', text: "Сбой Оракула. Проверьте OPENROUTER_API_KEY." }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePush = async () => {
@@ -172,138 +179,166 @@ export default function App() {
         body: JSON.stringify({ owner, repo, path: activeFile, content: fileContent })
       });
       if (res.ok) {
-        alert('МАТЕРИАЛИЗАЦИЯ ЗАВЕРШЕНА');
+        alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА. ПРОВЕРЬТЕ ЭКРАН ЧЕРЕЗ 1-2 МИНУТЫ.');
         setIframeKey(k => k + 1);
+      } else {
+        alert('Сбой материализации. Проверьте права GitHub PAT.');
       }
-    } catch (e) { alert('Сбой записи!'); }
-    finally { setIsLoading(false); }
+    } catch (e) {
+      alert('Ошибка соединения!');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const extractCodeFromText = (text: string) => {
+    if (!text.includes('```')) return null;
+    const firstIndex = text.indexOf('```');
+    const lastIndex = text.lastIndexOf('```');
+    if (firstIndex !== lastIndex) {
+      let code = text.substring(firstIndex + 3, lastIndex);
+      // Отрезаем метку языка (react, ts, etc)
+      const firstLineEnd = code.indexOf('\n');
+      if (firstLineEnd !== -1 && firstLineEnd < 15 && !code.substring(0, firstLineEnd).includes('import')) {
+        code = code.substring(firstLineEnd + 1);
+      }
+      return code.trim();
+    }
+    return null;
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
       
-      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ (Инженерный пульт) */}
+      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-850">
         
-        {/* Header (Фикс) */}
-        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0">
-          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1 text-sm text-emerald-400 w-32 outline-none" />
+        {/* Header */}
+        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0 shadow-lg">
+          <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1.5 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all" />
           <button onClick={() => {
               setIsLoading(true);
               fetch(`/api/repo?owner=${owner}&repo=${repo}`)
                 .then(r => r.json()).then(d => { setFiles(d); setIsConnected(true); })
                 .finally(() => setIsLoading(false));
-          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-1.5 rounded hover:bg-emerald-900 transition-all uppercase">Подключить</button>
-          {isConnected && <span className="text-emerald-500 font-mono text-[10px] animate-pulse">● LIVE</span>}
+          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-2 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest shadow-inner">Подключить проект</button>
+          {isConnected && <span className="text-emerald-500 font-mono text-[10px] animate-pulse font-bold">● LIVE</span>}
         </div>
 
-        {/* Рабочая зона (Flex-Grow) */}
+        {/* Рабочая зона */}
         <div className="flex-grow flex min-h-0 overflow-hidden">
-          {/* Файлы */}
+          {/* Хроники */}
           <div className="w-[180px] h-full flex-shrink-0 border-r border-gray-800">
             <FileTree files={files} onFileClick={handleFileClick} activeFile={activeFile} />
           </div>
           
-          {/* ЧАТ */}
+          {/* ЧАТ ОРАКУЛА */}
           <div className="flex-grow flex flex-col bg-[#070707] min-w-0">
             <div className="flex-grow overflow-y-auto p-4 space-y-6 no-scrollbar">
-              {messages.length === 0 && <div className="text-gray-800 text-[10px] text-center mt-10 uppercase tracking-[0.3em]">Оракул ожидает...</div>}
-              {messages.map((msg, i) => (
-                <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in duration-300`}>
-                   <span className="text-[8px] text-gray-600 mb-1 font-bold uppercase">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
-                   <div className={`p-4 rounded-2xl text-base font-mono border ${msg.role === 'user' ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300' : 'bg-[#0f0f0f] border-gray-800 text-gray-200'} max-w-[95%] shadow-xl leading-relaxed`}>
-                    {msg.text}
-                    {msg.role === 'assistant' && msg.text.includes('```') && (
-                      <button 
-                        onClick={() => { 
-                          const parts = msg.text.split('```');
-                          if (parts.length >= 3) {
-                              let code = parts[1];
-                              const firstLine = code.indexOf('\n');
-                              if (firstLine !== -1 && firstLine < 15 && !code.substring(0, firstLine).includes('import')) code = code.substring(firstLine + 1);
-                              setFileContent(code.trim()); 
-                              alert("КОД В БУФЕРЕ");
-                          }
-                        }} 
-                        className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-lg"
-                      >
-                        Применить код в буфер
-                      </button>
-                    )}
-                  </div>
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full opacity-10 select-none">
+                  <div className="text-5xl">⚡</div>
+                  <div className="text-[10px] uppercase tracking-[0.4em] mt-2 font-bold">Система готова</div>
                 </div>
-              ))}
+              )}
+              {messages.map((msg, i) => {
+                const codeToApply = msg.role === 'assistant' ? extractCodeFromText(msg.text) : null;
+                return (
+                  <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in duration-300`}>
+                    <span className="text-[8px] text-gray-600 mb-1 font-bold uppercase tracking-widest">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
+                    <div className={`p-4 rounded-2xl text-base font-mono border ${msg.role === 'user' ? 'bg-emerald-950/10 border-emerald-900/30 text-emerald-300' : 'bg-[#0f0f0f] border-gray-800 text-gray-200'} max-w-[95%] shadow-xl leading-relaxed`}>
+                      {msg.text}
+                      {codeToApply && (
+                        <button 
+                          onClick={() => { 
+                            setFileContent(codeToApply); 
+                            alert("КОД УСПЕШНО ПЕРЕДАН В БУФЕР");
+                          }} 
+                          className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-95"
+                        >
+                          Применить код в буфер
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Ввод (Фикс высота внутри зоны) */}
-            <div className="p-4 bg-[#0d0d0d] border-t border-gray-800">
+            {/* Ввод (Оптимизированная высота) */}
+            <div className="p-4 bg-[#0d0d0d] border-t border-gray-800 shadow-2xl">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Запрос..."
-                className="w-full p-4 bg-black border border-gray-700 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner leading-relaxed"
+                placeholder="Опишите задачу..."
+                className="w-full p-4 bg-black border border-gray-700 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner placeholder:text-gray-800"
               />
-              <div className="flex justify-between items-center mt-2">
-                 <span className="text-[9px] text-yellow-600/50 font-mono truncate max-w-[50%]">{activeFile || 'Выберите файл'}</span>
-                 <button onClick={handleSendMessage} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-black px-8 py-2 rounded-xl text-[10px] font-bold uppercase transition-all active:scale-95 disabled:opacity-50">Отправить</button>
+              <div className="flex justify-between items-center mt-3">
+                 <span className="text-[9px] text-yellow-600/50 font-mono truncate max-w-[50%] italic select-none">
+                    {activeFile ? `Фокус: ${activeFile.split('/').pop()}` : 'Выберите файл в Хрониках'}
+                 </span>
+                 <button onClick={handleSendMessage} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-black px-10 py-2.5 rounded-xl text-[10px] font-bold uppercase transition-all active:scale-95 disabled:opacity-50 tracking-widest">Отправить</button>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Буфер (Фикс высота снизу) */}
+        {/* БУФЕР (Нижняя часть) */}
         <div className="h-36 border-t border-gray-800 flex flex-col bg-black">
-          <div className="px-4 py-1.5 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center">
-            <span className="text-[9px] text-gray-600 uppercase font-bold tracking-tighter">Буфер материализации</span>
-            {activeFile && <button onClick={handlePush} className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900">PUSH</button>}
+          <div className="px-4 py-1.5 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center shadow-md">
+            <span className="text-[9px] text-gray-600 uppercase font-bold tracking-widest">Буфер материализации</span>
+            {activeFile && (
+              <button onClick={handlePush} className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse">МАТЕРИАЛИЗОВАТЬ (PUSH)</button>
+            )}
           </div>
           <textarea 
             value={fileContent} 
             onChange={(e) => setFileContent(e.target.value)} 
             className="flex-grow p-3 bg-[#030303] text-gray-500 font-mono text-[9px] outline-none resize-none no-scrollbar cursor-default leading-tight" 
-            readOnly 
+            placeholder="Ожидание кода из чата..."
           />
         </div>
       </div>
 
       {/* ПРАВАЯ ЧАСТЬ: ВИЗОР (Превью) */}
-      <div className="w-1/2 h-full bg-[#111] flex flex-col relative">
+      <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
         {/* NAV */}
-        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex items-center gap-3 z-20">
-          <div className="flex-grow flex items-center bg-black border border-gray-700 rounded px-3 py-1.5 min-w-0">
-            <span className="text-[9px] text-gray-600 font-bold mr-3 italic">NAV:</span>
+        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex items-center gap-3 z-20 shadow-lg">
+          <div className="flex-grow flex items-center bg-black border border-gray-700 rounded px-3 py-1.5 min-w-0 transition-all focus-within:border-emerald-900">
+            <span className="text-[9px] text-gray-600 font-bold mr-3 italic select-none">NAV:</span>
             <select 
               value={currentRoute} 
               onChange={(e) => setCurrentRoute(e.target.value)}
               className="bg-transparent text-emerald-400 text-xs font-mono outline-none mr-2 border-r border-gray-800 pr-2 cursor-pointer max-w-[120px]"
             >
-              {appRoutes.map((r, i) => <option key={i} value={r.path} className="bg-black">{r.label}</option>)}
+              {appRoutes.map((r, i) => <option key={i} value={r.path} className="bg-black text-white">{r.label}</option>)}
             </select>
             <input type="text" value={currentRoute} onChange={(e) => setCurrentRoute(e.target.value)} placeholder="путь" className="bg-transparent text-emerald-400 text-xs font-mono outline-none flex-grow min-w-0" />
           </div>
-          <button onClick={() => setIframeKey(k => k+1)} className="text-xl text-gray-600 hover:text-white transition-all p-1">🔄</button>
+          <button onClick={() => setIframeKey(k => k+1)} className="text-xl text-gray-600 hover:text-white transition-transform hover:rotate-180 duration-700 p-1">🔄</button>
         </div>
 
         {/* Пульт Визора */}
-        <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-xl border border-gray-800 p-2 rounded-xl flex flex-col gap-2 shadow-2xl pointer-events-auto">
-          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5">
+        <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-xl border border-gray-800 p-2 rounded-xl flex flex-col gap-2 shadow-2xl pointer-events-auto border-t-white/5">
+          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5 shadow-inner">
             <button onClick={() => setViewMode('mobile')} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase transition-all ${viewMode === 'mobile' ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600'}`}>Mob</button>
             <button onClick={() => setViewMode('desktop')} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase border-l border-gray-800 ${viewMode === 'desktop' ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600'}`}>PC</button>
           </div>
-          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5">
-            <button onClick={() => setIsPanMode(false)} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase ${!isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600'}`}>Cursor</button>
+          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5 shadow-inner">
+            <button onClick={() => setIsPanMode(false)} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase transition-all ${!isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600'}`}>Cursor</button>
             <button onClick={() => setIsPanMode(true)} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase border-l border-gray-800 ${isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600'}`}>Hand</button>
           </div>
-          <div className="flex items-center justify-between px-2 bg-black rounded-lg border border-gray-800 h-8">
+          <div className="flex items-center justify-between px-2 bg-black rounded-lg border border-gray-800 h-8 shadow-inner">
             <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="text-gray-600 hover:text-white px-2 text-sm font-bold">-</button>
             <span className="text-[9px] font-mono text-gray-300 min-w-[30px] text-center">{Math.round(zoom*100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} className="text-gray-500 hover:text-white px-2 text-sm font-bold">+</button>
+            <button onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} className="text-gray-600 hover:text-white px-2 text-sm font-bold">+</button>
+            <button onClick={() => {setPan({x:0, y:0}); setZoom(0.8);}} className="text-emerald-500 ml-2 text-[10px] hover:scale-125 transition-transform" title="Центрировать">⌖</button>
           </div>
         </div>
 
-        {/* Холст */}
+        {/* Холст Симуляции */}
         <div 
           className={`flex-grow bg-[#0c0c0c] relative overflow-hidden transition-colors ${isPanMode ? (isDragging ? 'cursor-grabbing scale-[0.99]' : 'cursor-grab') : ''}`}
           onMouseDown={(e) => { if(isPanMode) { setIsDragging(true); setDragStart({x: e.clientX - pan.x, y: e.clientY - pan.y}); } }}
@@ -317,8 +352,13 @@ export default function App() {
               className={`flex flex-col shadow-[0_0_150px_rgba(0,0,0,1)] border-[#1a1a1a] transition-all duration-500 ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[3px] rounded-2xl w-[1280px] h-[720px]'}`} 
               style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}
             >
-              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-8 flex justify-center z-20 pointer-events-none"><div className="w-32 h-6 bg-[#0a0a0a] rounded-b-2xl border border-white/5 shadow-2xl"></div></div>}
-              <iframe key={`${viewMode}-${currentRoute}-${iframeKey}`} src={`${LIVE_VIEW_URL}${currentRoute}`} className="w-full flex-grow border-none bg-black" sandbox="allow-scripts allow-same-origin allow-forms" />
+              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-8 flex justify-center z-20 pointer-events-none"><div className="w-32 h-6 bg-[#0a0a0a] rounded-b-2xl border-x border-b border-white/5 shadow-2xl"></div></div>}
+              <iframe 
+                key={`${viewMode}-${currentRoute}-${iframeKey}`} 
+                src={`${LIVE_VIEW_URL}${currentRoute}`} 
+                className={`w-full flex-grow border-none bg-black transition-opacity duration-1000 ${viewMode === 'mobile' ? 'pt-4' : ''}`} 
+                sandbox="allow-scripts allow-same-origin allow-forms" 
+              />
             </div>
           </div>
         </div>
