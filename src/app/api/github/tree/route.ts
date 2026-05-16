@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { fetchRepositoryTree } from '@/lib/github';
 
+// ИНЖЕНЕРНЫЙ ФИКС: Жестко отключаем кэширование на уровне сервера.
+// Заставляем систему собирать данные в реальном времени при каждом клике.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const owner = searchParams.get('owner') as string;
@@ -17,7 +22,15 @@ export async function GET(request: Request) {
 
   try {
     const tree = await fetchRepositoryTree(token, owner, repo, "main");
-    return NextResponse.json(tree);
+    
+    // Добавляем заголовки, чтобы даже браузер не смел кэшировать этот ответ
+    return NextResponse.json(tree, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching repository tree:', error);
     return NextResponse.json({ error: error.message || 'Failed to fetch repository tree' }, { status: 500 });
