@@ -142,20 +142,21 @@ export default function Home() {
   const [activeTipIndex, setActiveTipIndex] = useState(0);
   const [showTip, setShowTip] = useState(false);
 
-  // Карта страниц Живого Таро (Оракул будет пополнять этот список при создании архитектуры)
-  const APP_ROUTES = [
+  // Карта страниц Живого Таро
+  const [appRoutes] = useState([
     { label: "🏠 Главная", path: "" },
     { label: "🔮 Карта Дня", path: "daily-card" },
     { label: "🥉 Медный уровень", path: "copper" },
     { label: "🥈 Серебряный уровень", path: "silver" },
-    { label: "🥇 Золотой уровень (Сканер)", path: "gold" }
-  ];
+    { label: "🥇 Золотой уровень", path: "gold" },
+    { label: "💼 Казначейство", path: "treasury" }
+  ]);
 
   // База знаний инженера (Советы Оракула)
   const ORACLE_TIPS = [
     "СОВЕТ: Всегда требуй от меня выдавать файлы целиком. Если Next.js увидит оборванный код, он сломает сборку на Vercel.",
     "СОВЕТ: Используй 'force-dynamic' в API-роутах, если данные (например, структура папок) должны быть свежими и не кэшироваться сервером.",
-    "СОВЕТ: Если визор (телефон справа) не реагирует на клики, проверь, не включен ли режим 'Рука' на панели слева внизу.",
+    "СОВЕТ: Если визор (телефон справа) не реагирует на клики, проверь, не включен ли режим 'Рука' (индикатор должен быть на 'Стрелке').",
     "СОВЕТ: Архитектура 'Живого Таро' нелинейна. Если создаешь новую механику (например, Казначейство), сначала попроси меня описать структуру базы данных Prisma.",
     "СОВЕТ: Держи компоненты 'глупыми', а логику выноси в хуки. Это позволит легко переиспользовать карты Таро на разных экранах."
   ];
@@ -196,20 +197,30 @@ export default function Home() {
 1. РАБОТА С КОДОМ: Выдавай измененные файлы ИСКЛЮЧИТЕЛЬНО целиком. Никаких сокращений, комментариев вроде "// остальной код без изменений" или многоточий. Только монолитный рабочий код.
 2. МАСШТАБ ИЗМЕНЕНИЙ: Корректируй строго заявленную логику. Не упрощай дизайн, сохраняй исходную архитектуру, стили, анимации и подключения скриптов.
 3. КРОСС-ДИРЕКТОРИАЛЬНЫЙ АНАЛИЗ И РЕФАКТОРИНГ: При получении задачи анализируй связи между папками. Если требуется убрать устаревшую механику — чисто удаляй её из всех связанных файлов. Если требуется изолировать механику — выноси её в отдельный независимый объект/компонент.
-4. НАВИГАЦИЯ И СВЯЗИ: Автоматически создавай рабочие роуты и логические переходы между кнопками и новыми экранами. При добавлении новых экранов напоминай пользователю обновить массив APP_ROUTES в интерфейсе пульта.
+4. НАВИГАЦИЯ И СВЯЗИ: Автоматически создавай рабочие роуты и логические переходы между кнопками и новыми экранами.
 `;
+
+  // Безопасный парсинг ответов (защита от <!DOCTYPE html>)
+  const safeJsonParse = async (response: Response) => {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error(`Сервер вернул ошибку, а не данные. Вероятно, Vercel еще собирает проект или API недоступен. Фрагмент ответа: ${text.substring(0, 50)}...`);
+    }
+  };
 
   const fetchRepoStructure = async () => {
     if (!owner || !repo) return;
     setIsLoading(true);
     try {
       const res = await fetch(`/api/repo?owner=${owner}&repo=${repo}`);
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (data.error) throw new Error(data.error);
       setFiles(data);
       setIsConnected(true);
     } catch (err: any) {
-      alert(`Ошибка подключения: ${err.message}`);
+      alert(`Ошибка: ${err.message}`);
       setIsConnected(false);
     } finally {
       setIsLoading(false);
@@ -221,10 +232,11 @@ export default function Home() {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
-      const data = await res.json();
+      const data = await safeJsonParse(res);
+      if (data.error) throw new Error(data.error);
       setFileContent(data.content || '');
-    } catch (err) {
-      alert('Не удалось загрузить содержимое файла');
+    } catch (err: any) {
+      alert(`Не удалось загрузить файл: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -256,10 +268,11 @@ export default function Home() {
           fileContext: activeFile ? { path: activeFile, content: fileContent } : null
         })
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
+      if (data.error) throw new Error(data.error);
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
-    } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Ошибка генерации ответа. Проверьте логи сервера.' }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, { role: 'assistant', text: `Критический сбой API чата: ${err.message}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -278,12 +291,12 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner, repo, path: activeFile, content: fileContent })
       });
-      const data = await res.json();
+      const data = await safeJsonParse(res);
       if (data.success) {
         alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА! Изменения отправлены в GitHub.');
         setTimeout(() => setIframeKey(prev => prev + 1), 5000);
       } else {
-        throw new Error(data.error);
+        throw new Error(data.error || "Неизвестная ошибка");
       }
     } catch (err: any) {
       alert(`Критический сбой коммита: ${err.message}`);
@@ -327,7 +340,8 @@ export default function Home() {
       {/* ЛЕВАЯ ЧАСТЬ: Командный Центр */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-850 z-20 bg-[#050505]">
         
-        <div className="p-3 bg-[#0d0d0d] border-b border-gray-850 flex gap-2 items-center">
+        {/* Шапка подключения */}
+        <div className="p-3 bg-[#0d0d0d] border-b border-gray-850 flex gap-2 items-center flex-shrink-0">
           <input
             type="text"
             value={repo}
@@ -347,11 +361,13 @@ export default function Home() {
 
         <div className="flex-grow flex overflow-hidden">
           
-          <div className="w-2/5 h-full border-r border-gray-850">
+          {/* Дерево файлов */}
+          <div className="w-1/3 h-full border-r border-gray-850">
             <FileTree files={files} onFileClick={handleFileClick} onCreateFile={handleCreateFile} />
           </div>
 
-          <div className="w-3/5 h-full flex flex-col bg-[#070707]">
+          {/* Чат и огромное окно Промпта */}
+          <div className="w-2/3 h-full flex flex-col bg-[#070707]">
             <div className="flex-grow overflow-y-auto p-4 space-y-4">
               {messages.length === 0 ? (
                 <div className="text-gray-600 text-xs space-y-2 mt-10 p-4 border border-gray-900 rounded bg-black/30">
@@ -362,7 +378,7 @@ export default function Home() {
                 messages.map((msg, idx) => (
                   <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <span className="text-[9px] text-gray-500 uppercase font-mono mb-1">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
-                    <div className={`p-3 rounded text-xs whitespace-pre-wrap max-w-[95%] font-mono ${msg.role === 'user' ? 'bg-emerald-950/20 text-emerald-300 border border-emerald-900/40' : 'bg-gray-900/50 text-gray-300 border border-gray-850'}`}>
+                    <div className={`p-3 rounded text-sm whitespace-pre-wrap max-w-[95%] font-mono ${msg.role === 'user' ? 'bg-emerald-950/20 text-emerald-300 border border-emerald-900/40' : 'bg-gray-900/50 text-gray-300 border border-gray-850'}`}>
                       {msg.text}
                       {msg.role === 'assistant' && msg.text.includes(codeBlockMarker) && (
                         <button
@@ -371,7 +387,7 @@ export default function Home() {
                             const match = msg.text.match(regex);
                             if (match && match[1]) handleApplyCode(match[1].trim());
                           }}
-                          className="mt-3 block w-full bg-emerald-900/40 hover:bg-emerald-800 text-emerald-400 font-bold py-1 px-2 rounded border border-emerald-700/50 text-[10px] transition-colors"
+                          className="mt-3 block w-full bg-emerald-900/40 hover:bg-emerald-800 text-emerald-400 font-bold py-2 px-3 rounded border border-emerald-700/50 text-xs transition-colors"
                         >
                           ПРИМЕНИТЬ КОД В РЕДАКТОР
                         </button>
@@ -382,26 +398,30 @@ export default function Home() {
               )}
             </div>
 
-            <div className="p-3 bg-[#0d0d0d] border-t border-gray-850 flex gap-2">
+            {/* Увеличенная зона ввода промпта */}
+            <div className="p-3 bg-[#0d0d0d] border-t border-gray-850 flex flex-col gap-2 flex-shrink-0">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                placeholder="Запрос (например: 'Изолируй механику...')"
-                className="flex-grow p-2 bg-black border border-gray-800 rounded text-xs outline-none focus:border-emerald-600 resize-none h-12 text-gray-300"
+                placeholder="Запрос инженера (опишите логику, дизайн, архитектуру...)"
+                className="w-full p-3 bg-black border border-gray-800 rounded text-sm outline-none focus:border-emerald-600 resize-none h-40 text-gray-300"
               />
-              <button
-                onClick={handleSendMessage}
-                disabled={isLoading}
-                className="bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 px-4 rounded text-xs font-bold transition-colors"
-              >
-                Отправить
-              </button>
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSendMessage}
+                  disabled={isLoading}
+                  className="bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-300 px-6 py-2 rounded text-xs font-bold transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? 'Генерация...' : 'Отправить'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="h-1/3 border-t border-gray-850 flex flex-col bg-black">
+        {/* Сжатая панель монолитного кода */}
+        <div className="h-1/4 min-h-[160px] border-t border-gray-850 flex flex-col bg-black flex-shrink-0">
           <div className="p-2 bg-[#0d0d0d] border-b border-gray-850 flex justify-between items-center text-xs">
             <span className="font-mono text-[11px] text-gray-400">Активный файл: <span className="text-emerald-400">{activeFile || 'Не выбран'}</span></span>
             {activeFile && (
@@ -417,30 +437,43 @@ export default function Home() {
           <textarea
             value={fileContent}
             onChange={(e) => setFileContent(e.target.value)}
-            className="flex-grow p-3 bg-[#030303] text-gray-300 font-mono text-xs outline-none resize-none overflow-y-auto leading-relaxed"
-            placeholder="Здесь отобразится монолитный код выбранного файла Живого Таро..."
+            className="flex-grow p-3 bg-[#030303] text-gray-600 font-mono text-[10px] outline-none resize-none overflow-y-auto leading-relaxed focus:text-gray-400 transition-colors"
+            placeholder="Технический буфер кода (изменения применяются сюда перед отправкой)..."
           />
         </div>
       </div>
 
-      {/* ПРАВАЯ ЧАСТЬ: Живой Визор с Навигатором и Плавающей Панелью */}
+      {/* ПРАВАЯ ЧАСТЬ: Живой Визор */}
       <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
         {/* НАВИГАТОР СТРАНИЦ (Верхняя шапка) */}
         <div className="p-3 bg-[#0d0d0d] border-b border-gray-850 flex justify-between items-center z-20 relative shadow-md">
-          <div className="flex items-center gap-3 w-2/3">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          
+          <div className="flex items-center gap-2 w-3/4">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></div>
             
-            {/* Выпадающий список страниц */}
+            {/* Выпадающий список страниц (пресеты) */}
             <select
               value={currentRoute}
               onChange={(e) => setCurrentRoute(e.target.value)}
-              className="bg-black border border-gray-800 text-emerald-400 text-xs font-mono rounded px-2 py-1 outline-none focus:border-emerald-600 cursor-pointer flex-grow"
+              className="bg-black border border-gray-800 text-emerald-400 text-[10px] font-mono rounded px-2 py-1 outline-none focus:border-emerald-600 cursor-pointer w-1/3 uppercase tracking-wider"
             >
-              {APP_ROUTES.map((route, idx) => (
-                <option key={idx} value={route.path}>{route.label} (/{route.path})</option>
+              {appRoutes.map((route, idx) => (
+                <option key={idx} value={route.path}>{route.label}</option>
               ))}
             </select>
+
+            <span className="text-gray-600 font-bold mx-1">/</span>
+
+            {/* Ручной ввод маршрута (если нет в списке) */}
+            <input
+              type="text"
+              value={currentRoute}
+              onChange={(e) => setCurrentRoute(e.target.value)}
+              placeholder="или впишите любой путь..."
+              className="bg-black border border-gray-800 text-emerald-400 text-xs font-mono rounded px-3 py-1 outline-none focus:border-emerald-600 flex-grow"
+              title="Введите URL страницы, чтобы перепрыгнуть на нее"
+            />
           </div>
           
           <div className="flex items-center gap-2 relative">
