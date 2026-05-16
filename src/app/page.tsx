@@ -134,9 +134,9 @@ export default function App() {
     { label: "🏠 Главная", path: "" }
   ]);
 
-  const [advice, setAdvice] = useState("Подключите 'Живое Таро' для начала анализа архитектуры.");
+  const [advice, setAdvice] = useState("Подключите 'Живое Таро' для анализа.");
 
-  const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
+  const LIVE_VIEW_URL = "[https://living-tarot.vercel.app/](https://living-tarot.vercel.app/)";
 
   const centerView = () => {
     setPan({ x: 0, y: 0 });
@@ -162,28 +162,25 @@ export default function App() {
     if (generatedRoutes.length > 0) setAppRoutes(generatedRoutes);
   }, [files]);
 
-  // Реактивный совет Оракула
   useEffect(() => {
     if (!isConnected) return;
     if (!activeFile) {
-        setAdvice("💡 Проект ONLINE. Выберите файл в Хрониках слева.");
+        setAdvice("💡 Проект ONLINE. Выберите файл в Хрониках.");
         return;
     }
-    if (activeFile.includes('page.tsx')) setAdvice("💡 Редактируем визуальный слой. Проверьте NAV-маршрут.");
-    else if (activeFile.includes('api/')) setAdvice("💡 Внимание: это серверный API. Ошибки здесь положат всё приложение.");
-    else setAdvice(`💡 Анализ объекта: ${activeFile.split('/').pop()}.`);
+    if (activeFile.includes('page.tsx')) setAdvice("💡 Редактируем визуальный слой.");
+    else if (activeFile.includes('api/')) setAdvice("💡 Внимание: это серверный API.");
+    else setAdvice(`💡 Анализ: ${activeFile.split('/').pop()}.`);
   }, [activeFile, isConnected]);
 
   const safeFetch = async (url: string, options?: RequestInit) => {
     try {
       const res = await fetch(url, options);
       const text = await res.text();
-      if (!res.ok) {
-        throw new Error(`Ошибка API (${res.status}): ${text.substring(0, 100)}`);
-      }
+      if (!res.ok) throw new Error(`Ошибка API (${res.status})`);
       return JSON.parse(text);
     } catch (e: any) {
-      throw new Error(e.message || "Сбой связи с сервером.");
+      throw new Error(e.message || "Сбой связи.");
     }
   };
 
@@ -194,8 +191,7 @@ export default function App() {
       setFiles(data);
       setIsConnected(true);
     } catch (err: any) {
-      alert(`Ошибка подключения: ${err.message}`);
-      setIsConnected(false);
+      alert(`Ошибка: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -208,7 +204,7 @@ export default function App() {
       const data = await safeFetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
       setFileContent(data.content || '');
     } catch (err: any) {
-      alert(`Ошибка чтения файла: ${err.message}`);
+      alert(`Ошибка чтения: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -231,7 +227,7 @@ export default function App() {
       });
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
     } catch (err: any) {
-      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой нейросети: ${err.message}` }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой: ${err.message}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -269,16 +265,14 @@ export default function App() {
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, []);
 
-  // Жесткий маркер для парсера
   const codeBlockMarker = '```';
 
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
       
-      {/* ЛЕВАЯ ЧАСТЬ: МАСТЕРСКАЯ (Крупные шрифты) */}
+      {/* МАСТЕРСКАЯ (Слева) */}
       <div className="w-1/2 h-full flex flex-col border-r border-gray-800 z-20 bg-[#050505]">
         
-        {/* Верхняя панель управления */}
         <div className="p-4 bg-[#0d0d0d] border-b border-gray-800 flex gap-4 items-center flex-shrink-0 shadow-2xl">
           <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded-lg px-4 py-3 text-base text-emerald-400 w-1/3 outline-none focus:border-emerald-500" />
           <button onClick={fetchRepoStructure} disabled={isLoading} className="bg-emerald-950 text-emerald-400 text-base font-bold px-6 py-3 rounded-lg hover:bg-emerald-900 transition-all uppercase tracking-tighter shadow-md">Подключить Хроники</button>
@@ -286,12 +280,10 @@ export default function App() {
         </div>
 
         <div className="flex-grow flex overflow-hidden">
-          {/* Дерево файлов */}
           <div className="w-1/4 h-full border-r border-gray-800 bg-[#080808]">
             <FileTree files={files} onFileClick={handleFileClick} onCreateFile={(f) => { setActiveFile(f); setFiles(prev => [...prev, {path: f, type:'blob'}]); }} />
           </div>
           
-          {/* Чат Оракула */}
           <div className="w-3/4 h-full flex flex-col bg-[#070707]">
             <div className="flex-grow overflow-y-auto p-6 space-y-8 no-scrollbar">
               {messages.length === 0 && <div className="text-gray-700 text-base text-center mt-32 uppercase tracking-[0.4em] opacity-30 select-none italic font-serif">Оракул ожидает команд</div>}
@@ -303,23 +295,22 @@ export default function App() {
                     {msg.role === 'assistant' && msg.text.includes(codeBlockMarker) && (
                       <button 
                         onClick={() => { 
-                          // --- УСИЛЕННЫЙ ПАРСЕР КОДА (МЕТОД СЕПАРАЦИИ) ---
+                          // --- БЕЗОПАСНЫЙ ЗАХВАТ КОДА ---
                           const parts = msg.text.split(codeBlockMarker);
                           if (parts.length >= 3) {
-                              // Берем контент между первым и последним вхождением маркера
-                              let rawCode = parts[1];
-                              const lines = rawCode.split('\n');
-                              // Отрезаем метку языка программирования (например: react, ts, typescript)
-                              if (lines.length > 0 && lines[0].trim().length < 15 && !lines[0].includes(' ') && !lines[0].includes('import')) {
-                                  rawCode = lines.slice(1).join('\n');
+                              let code = parts[1];
+                              const firstLineEnd = code.indexOf('\n');
+                              // Отрезаем метку языка (react/ts)
+                              if (firstLineEnd !== -1 && firstLineEnd < 15 && !code.substring(0, firstLineEnd).includes('import')) {
+                                  code = code.substring(firstLineEnd + 1);
                               }
-                              setFileContent(rawCode.trim()); 
-                              alert("КОД ПЕРЕДАН В БУФЕР МАТЕРИАЛИЗАЦИИ");
+                              setFileContent(code.trim()); 
+                              alert("КОД ПЕРЕДАН В БУФЕР");
                           } else {
-                              alert("Оракул прислал неполный или некорректный формат кода. Повторите запрос.");
+                              alert("Оракул выдал неполный код.");
                           }
                         }} 
-                        className="mt-6 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-4 rounded-xl text-base font-bold uppercase transition-all active:scale-95 shadow-[0_0_30px_rgba(16,185,129,0.3)]"
+                        className="mt-6 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-4 rounded-xl text-base font-bold uppercase transition-all active:scale-95 shadow-lg"
                       >
                         Применить код в буфер
                       </button>
@@ -329,53 +320,43 @@ export default function App() {
               ))}
             </div>
 
-            {/* Реактивный совет */}
-            <div className="mx-6 mb-3 p-4 bg-yellow-950/10 border border-yellow-900/30 rounded-xl text-base text-yellow-500/90 font-mono italic shadow-inner">
+            <div className="mx-6 mb-3 p-4 bg-yellow-950/10 border border-yellow-900/30 rounded-xl text-base text-yellow-500/90 font-mono italic">
               {advice}
             </div>
 
-            {/* Терминал ввода */}
             <div className="p-5 bg-[#0d0d0d] border-t border-gray-800 flex flex-col gap-4 shadow-inner">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Опишите желаемое изменение в Живом Таро..."
-                className="w-full p-5 bg-black border border-gray-700 rounded-2xl text-xl outline-none focus:border-emerald-600 resize-none h-56 text-gray-200 no-scrollbar shadow-inner leading-relaxed transition-all placeholder:text-gray-700"
+                placeholder="Опишите изменение в Живом Таро..."
+                className="w-full p-5 bg-black border border-gray-700 rounded-2xl text-xl outline-none focus:border-emerald-600 resize-none h-56 text-gray-200 no-scrollbar shadow-inner leading-relaxed placeholder:text-gray-700"
               />
               <button onClick={handleSendMessage} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-500 text-black px-12 py-4 rounded-2xl text-base font-bold uppercase self-end transition-all active:scale-95 shadow-lg disabled:opacity-50 tracking-widest">Отправить</button>
             </div>
           </div>
         </div>
 
-        {/* БУФЕР МАТЕРИАЛИЗАЦИИ (Нижнее поле) */}
+        {/* БУФЕР (Внизу) */}
         <div className="h-64 border-t border-gray-800 flex flex-col bg-black shadow-2xl">
           <div className="px-5 py-3 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center">
-            <span className="text-sm text-gray-500 font-mono truncate italic select-none">Буфер материализации: <span className="text-emerald-500">{activeFile || 'Пусто'}</span></span>
-            {activeFile && (
-                <button 
-                    onClick={handlePushToGitHub} 
-                    className="bg-emerald-950 hover:bg-emerald-800 text-emerald-400 font-bold text-sm uppercase px-6 py-2 rounded-lg border border-emerald-700/30 transition-all shadow-md"
-                >
-                    Материализовать (PUSH)
-                </button>
-            )}
+            <span className="text-sm text-gray-500 font-mono truncate italic select-none">Буфер: <span className="text-emerald-500">{activeFile || 'Пусто'}</span></span>
+            {activeFile && <button onClick={handlePushToGitHub} className="bg-emerald-950 hover:bg-emerald-800 text-emerald-400 font-bold text-sm uppercase px-6 py-2 rounded-lg border border-emerald-700/30">PUSH в GitHub</button>}
           </div>
           <textarea 
             value={fileContent} 
             onChange={(e) => setFileContent(e.target.value)} 
             className="flex-grow p-6 bg-[#030303] text-gray-400 font-mono text-sm outline-none resize-none no-scrollbar cursor-default leading-relaxed" 
-            placeholder="Код появится здесь после нажатия 'Применить код в буфер'..."
+            placeholder="Здесь появится код..."
           />
         </div>
       </div>
 
-      {/* ПРАВАЯ ЧАСТЬ: ЖИВОЙ ВИЗОР */}
+      {/* ВИЗОР (Справа) */}
       <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
-        {/* NAV ПАНЕЛЬ */}
         <div className="p-4 bg-[#0d0d0d] border-b border-gray-800 flex items-center gap-4 z-20 shadow-2xl">
-          <div className="flex-grow flex items-center bg-black border border-gray-700 rounded-xl px-4 py-3 transition-all focus-within:border-emerald-800">
-            <span className="text-sm text-gray-600 font-bold mr-4 italic select-none">NAV:</span>
+          <div className="flex-grow flex items-center bg-black border border-gray-700 rounded-xl px-4 py-3">
+            <span className="text-sm text-gray-600 font-bold mr-4 italic">NAV:</span>
             <select 
               value={currentRoute} 
               onChange={(e) => setCurrentRoute(e.target.value)}
@@ -383,27 +364,27 @@ export default function App() {
             >
               {appRoutes.map((r, i) => <option key={i} value={r.path} className="bg-black text-white">{r.label}</option>)}
             </select>
-            <span className="text-base text-emerald-900 mr-2 select-none">/</span>
+            <span className="text-base text-emerald-900 mr-2">/</span>
             <input type="text" value={currentRoute} onChange={(e) => setCurrentRoute(e.target.value)} placeholder="путь" className="bg-transparent text-emerald-400 text-base font-mono outline-none flex-grow" />
           </div>
-          <button onClick={() => setIframeKey(k => k+1)} className="text-2xl text-gray-600 hover:text-white transition-all hover:rotate-180 duration-700 p-3" title="Обновить экран">🔄</button>
+          <button onClick={() => setIframeKey(k => k+1)} className="text-2xl text-gray-600 hover:text-white transition-all hover:rotate-180 duration-700 p-3">🔄</button>
         </div>
 
-        {/* --- КОМПАКТНАЯ ПАНЕЛЬ ВИЗОРА (Уменьшена в 4 раза) --- */}
-        <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-xl border border-gray-800 p-2 rounded-xl flex flex-col gap-2 shadow-[0_15px_40px_rgba(0,0,0,0.8)] pointer-events-auto border-t-white/5">
-          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden shadow-inner p-0.5">
+        {/* КОМПАКТНАЯ ПАНЕЛЬ (В 4 раза меньше) */}
+        <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-xl border border-gray-800 p-2 rounded-xl flex flex-col gap-2 shadow-2xl pointer-events-auto border-t-white/5">
+          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5">
             <button onClick={() => setViewMode('mobile')} className={`flex-grow px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-md ${viewMode === 'mobile' ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-500'}`}>Mob</button>
             <button onClick={() => setViewMode('desktop')} className={`flex-grow px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-md ${viewMode === 'desktop' ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-500'}`}>PC</button>
           </div>
-          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden shadow-inner p-0.5">
+          <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5">
             <button onClick={() => setIsPanMode(false)} className={`flex-grow px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-md ${!isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-500'}`}>Курсор</button>
             <button onClick={() => setIsPanMode(true)} className={`flex-grow px-2 py-1 text-[9px] font-bold uppercase transition-all rounded-md ${isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-500'}`}>Рука</button>
           </div>
           <div className="flex items-center justify-between px-2 bg-black rounded-lg border border-gray-800 shadow-inner h-8">
-            <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="text-gray-500 hover:text-white px-2 text-sm transition-colors font-bold">-</button>
-            <span className="text-[10px] font-mono text-gray-300 min-w-[35px] text-center font-bold">{Math.round(zoom*100)}%</span>
-            <button onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} className="text-gray-500 hover:text-white px-2 text-sm transition-colors font-bold">+</button>
-            <button onClick={centerView} className="text-emerald-500 ml-2 text-sm hover:scale-125 transition-transform" title="В центр">⌖</button>
+            <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="text-gray-500 hover:text-white px-2 text-sm font-bold">-</button>
+            <span className="text-[10px] font-mono text-gray-300 min-w-[35px] text-center">{Math.round(zoom*100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} className="text-gray-500 hover:text-white px-2 text-sm font-bold">+</button>
+            <button onClick={centerView} className="text-emerald-500 ml-2 text-sm hover:scale-125 transition-transform">⌖</button>
           </div>
         </div>
 
@@ -418,16 +399,11 @@ export default function App() {
           {isPanMode && <div className="absolute inset-0 z-30 bg-transparent" />}
           <div className="absolute top-1/2 left-1/2" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
             <div 
-              className={`flex flex-col shadow-[0_0_120px_rgba(0,0,0,1)] border-[#1a1a1a] transition-all duration-300 ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[2px] rounded-2xl w-[1280px] h-[720px]'}`} 
+              className={`flex flex-col shadow-[0_0_150px_rgba(0,0,0,1)] border-[#1a1a1a] transition-all duration-300 ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[2px] rounded-2xl w-[1280px] h-[720px]'}`} 
               style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}
             >
               {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none"><div className="w-36 h-6 bg-[#0a0a0a] rounded-b-3xl border-x border-b border-white/5 shadow-2xl"></div></div>}
-              <iframe 
-                key={`${viewMode}-${currentRoute}-${iframeKey}`} 
-                src={`${LIVE_VIEW_URL}${currentRoute}`} 
-                className={`w-full flex-grow border-none bg-black transition-opacity duration-700 ${viewMode === 'mobile' ? 'pt-4' : ''}`} 
-                sandbox="allow-scripts allow-same-origin allow-forms" 
-              />
+              <iframe key={`${viewMode}-${currentRoute}-${iframeKey}`} src={`${LIVE_VIEW_URL}${currentRoute}`} className={`w-full flex-grow border-none bg-black transition-opacity duration-700 ${viewMode === 'mobile' ? 'pt-4' : ''}`} sandbox="allow-scripts allow-same-origin allow-forms" />
             </div>
           </div>
         </div>
