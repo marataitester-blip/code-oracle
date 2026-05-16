@@ -1,17 +1,22 @@
-// pages/_app.js
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-import '../styles/globals.css';
-import BottomNavigation from '../components/BottomNavigation';
+const inter = Inter({ subsets: ["latin"] });
 
-function MyApp({ Component, pageProps }) {
+export const metadata: Metadata = {
+  title: "Code Oracle",
+  description: "AI Coding Assistant",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <div className="appContainer">
-      <main className="content">
-        <Component {...pageProps} />
-      </main>
-      <BottomNavigation />
-    </div>
+    <html lang="ru">
+      <body className={inter.className}>{children}</body>
+    </html>
   );
 }
-
-export default MyApp;
