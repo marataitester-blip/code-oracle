@@ -297,11 +297,12 @@ export default function App() {
               {messages.map((msg, i) => (
                 <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in duration-500`}>
                    <span className="text-xs text-gray-500 mb-2 uppercase font-mono tracking-widest">{msg.role === 'user' ? 'Инженер' : 'Оракул'}</span>
-                   <div className={`p-5 rounded-2xl text-lg font-mono border shadow-2xl ${msg.role === 'user' ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300' : 'bg-gray-900 border-gray-800 text-gray-200'} max-w-[95%] shadow-lg leading-relaxed`}>
+                   <div className={`p-5 rounded-2xl text-lg font-mono border shadow-2xl ${msg.role === 'user' ? 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300' : 'bg-gray-900 border-gray-800 text-gray-200'} max-w-[95%] leading-relaxed`}>
                     {msg.text}
                     {msg.role === 'assistant' && msg.text.includes(codeBlockMarker) && (
                       <button 
                         onClick={() => { 
+                          // БЕЗОПАСНЫЙ МЕХАНИЗМ СЕПАРАЦИИ ТЕКСТА
                           const parts = msg.text.split(codeBlockMarker);
                           if (parts.length >= 3) {
                               let rawCode = parts[1];
@@ -403,7 +404,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* ХОЛСТ СИМУЛЯЦИИ */}
+        {/* ХОЛСТ СИМУЛЯЦИИ --- */}
         <div 
           className={`flex-grow bg-[#0c0c0c] relative overflow-hidden transition-colors ${isPanMode ? (isDragging ? 'cursor-grabbing scale-[0.99]' : 'cursor-grab') : ''}`}
           onMouseDown={(e) => { if(isPanMode) { setIsDragging(true); setDragStart({x: e.clientX - pan.x, y: e.clientY - pan.y}); } }}
