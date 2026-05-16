@@ -131,16 +131,35 @@ export default function App() {
     setAppRoutes(generated.sort((a,b) => a.path === "" ? -1 : 1));
   }, [files]);
 
+  const safeFetch = async (url: string, options?: RequestInit) => {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      
+      if (!res.ok) {
+        let errorData;
+        try { errorData = JSON.parse(text); } catch(e) { errorData = { error: text }; }
+        throw new Error(errorData.error || `Ошибка сервера: ${res.status}`);
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error("Сервер прислал пустые или некорректные данные (не JSON).");
+      }
+    } catch (e: any) {
+      throw new Error(e.message || "Сбой соединения с сервером.");
+    }
+  };
+
   const handleFileClick = async (path: string) => {
     setActiveFile(path);
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка загрузки файла');
+      const data = await safeFetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
       setFileContent(data.content || '');
     } catch (e: any) {
-      alert(`Ошибка чтения: ${e.message}`);
+      alert(`Ошибка чтения файла: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +172,7 @@ export default function App() {
     setInputMessage('');
     setIsLoading(true);
     try {
-      const res = await fetch('/api/chat', {
+      const data = await safeFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,11 +180,9 @@ export default function App() {
           fileContext: activeFile ? { path: activeFile, content: fileContent } : null
         })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка чата');
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
     } catch (e: any) {
-      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой: ${e.message}. Проверьте OPENROUTER_API_KEY.` }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой Оракула: ${e.message}` }]);
     } finally {
       setIsLoading(false);
     }
@@ -175,23 +192,18 @@ export default function App() {
     if (!activeFile) return;
     setIsLoading(true);
     try {
-      const res = await fetch('/api/files', {
+      const data = await safeFetch('/api/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ owner, repo, path: activeFile, content: fileContent })
       });
       
-      const data = await res.json();
-      
-      if (res.ok) {
+      if (data.success) {
         alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА. Пересборка Живого Таро запущена.');
         setIframeKey(k => k + 1);
-      } else {
-        // Выводим детальную ошибку из логов сервера прямо на экран
-        alert(`СБОЙ МАТЕРИАЛИЗАЦИИ (Error 500): ${data.error || 'Неизвестная ошибка сервера'}. Проверьте GITHUB_PAT в Vercel.`);
       }
     } catch (e: any) {
-      alert(`Критическая ошибка соединения: ${e.message}`);
+      alert(`СБОЙ МАТЕРИАЛИЗАЦИИ: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -212,6 +224,20 @@ export default function App() {
     return null;
   };
 
+  const handleConnect = async () => {
+    setIsLoading(true);
+    try {
+      const data = await safeFetch(`/api/repo?owner=${owner}&repo=${repo}`);
+      setFiles(data);
+      setIsConnected(true);
+    } catch (e: any) {
+      alert(`Ошибка подключения: ${e.message}`);
+      setIsConnected(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
       
@@ -221,13 +247,9 @@ export default function App() {
         {/* Header */}
         <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0 shadow-lg">
           <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1.5 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all" />
-          <button onClick={() => {
-              setIsLoading(true);
-              fetch(`/api/repo?owner=${owner}&repo=${repo}`)
-                .then(r => r.json()).then(d => { setFiles(d); setIsConnected(true); })
-                .catch(e => alert(`Ошибка подключения: ${e.message}`))
-                .finally(() => setIsLoading(false));
-          }} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-2 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest">Подключить проект</button>
+          <button onClick={handleConnect} disabled={isLoading} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-2 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest">
+            {isLoading ? 'Загрузка...' : 'Подключить проект'}
+          </button>
           {isConnected && <span className="text-emerald-500 font-mono text-[10px] animate-pulse font-bold">● LIVE</span>}
         </div>
 
@@ -298,7 +320,7 @@ export default function App() {
               <button 
                 onClick={handlePush} 
                 disabled={isLoading}
-                className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse disabled:opacity-50"
+                className="bg-emerald-950 hover:bg-emerald-800 text-emerald-400 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse disabled:opacity-50"
               >
                 {isLoading ? 'ПРОЦЕСС...' : 'МАТЕРИАЛИЗОВАТЬ (PUSH)'}
               </button>
@@ -317,7 +339,7 @@ export default function App() {
       <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
         {/* NAV */}
-        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex items-center gap-3 z-20 shadow-lg">
+        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex items-center gap-4 z-20 shadow-lg">
           <div className="flex-grow flex items-center bg-black border border-gray-700 rounded px-3 py-1.5 min-w-0 transition-all focus-within:border-emerald-900">
             <span className="text-[9px] text-gray-600 font-bold mr-3 italic select-none">NAV:</span>
             <select 
