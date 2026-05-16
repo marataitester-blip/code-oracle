@@ -135,21 +135,47 @@ export default function Home() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [isPanMode, setIsPanMode] = useState(false); // Режим "Рука" (Перетаскивание)
+  const [isPanMode, setIsPanMode] = useState(false);
 
-  // Горячая клавиша: Пробел (Space) временно включает режим "Рука"
+  // СОСТОЯНИЯ НАВИГАЦИИ И СОВЕТОВ
+  const [currentRoute, setCurrentRoute] = useState('');
+  const [activeTipIndex, setActiveTipIndex] = useState(0);
+  const [showTip, setShowTip] = useState(false);
+
+  // Карта страниц Живого Таро (Оракул будет пополнять этот список при создании архитектуры)
+  const APP_ROUTES = [
+    { label: "🏠 Главная", path: "" },
+    { label: "🔮 Карта Дня", path: "daily-card" },
+    { label: "🥉 Медный уровень", path: "copper" },
+    { label: "🥈 Серебряный уровень", path: "silver" },
+    { label: "🥇 Золотой уровень (Сканер)", path: "gold" }
+  ];
+
+  // База знаний инженера (Советы Оракула)
+  const ORACLE_TIPS = [
+    "СОВЕТ: Всегда требуй от меня выдавать файлы целиком. Если Next.js увидит оборванный код, он сломает сборку на Vercel.",
+    "СОВЕТ: Используй 'force-dynamic' в API-роутах, если данные (например, структура папок) должны быть свежими и не кэшироваться сервером.",
+    "СОВЕТ: Если визор (телефон справа) не реагирует на клики, проверь, не включен ли режим 'Рука' на панели слева внизу.",
+    "СОВЕТ: Архитектура 'Живого Таро' нелинейна. Если создаешь новую механику (например, Казначейство), сначала попроси меня описать структуру базы данных Prisma.",
+    "СОВЕТ: Держи компоненты 'глупыми', а логику выноси в хуки. Это позволит легко переиспользовать карты Таро на разных экранах."
+  ];
+
+  const handleNextTip = () => {
+    setActiveTipIndex((prev) => (prev + 1) % ORACLE_TIPS.length);
+    setShowTip(true);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Игнорируем нажатие, если инженер печатает в чат или редактор
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
       if (e.code === 'Space') {
-        e.preventDefault(); // Отключаем стандартный скролл страницы браузером
+        e.preventDefault();
         setIsPanMode(true);
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
       if (e.code === 'Space') {
         setIsPanMode(false);
       }
@@ -163,16 +189,14 @@ export default function Home() {
     };
   }, []);
 
-  // Константа боевого адреса твоего Живого Таро
   const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
 
-  // Кодекс Архитектора - Жесткие правила
   const CODE_ORACLE_DIRECTIVES = `
 [СИСТЕМНЫЙРЕГЛАМЕНТДЛЯОРАКУЛА - ИЗМЕНЕНИЮ НЕ ПОДЛЕЖИТ]:
 1. РАБОТА С КОДОМ: Выдавай измененные файлы ИСКЛЮЧИТЕЛЬНО целиком. Никаких сокращений, комментариев вроде "// остальной код без изменений" или многоточий. Только монолитный рабочий код.
 2. МАСШТАБ ИЗМЕНЕНИЙ: Корректируй строго заявленную логику. Не упрощай дизайн, сохраняй исходную архитектуру, стили, анимации и подключения скриптов.
 3. КРОСС-ДИРЕКТОРИАЛЬНЫЙ АНАЛИЗ И РЕФАКТОРИНГ: При получении задачи анализируй связи между папками. Если требуется убрать устаревшую механику — чисто удаляй её из всех связанных файлов. Если требуется изолировать механику — выноси её в отдельный независимый объект/компонент.
-4. НАВИГАЦИЯ И СВЯЗИ: Автоматически создавай рабочие роуты и логические переходы между кнопками и новыми экранами.
+4. НАВИГАЦИЯ И СВЯЗИ: Автоматически создавай рабочие роуты и логические переходы между кнопками и новыми экранами. При добавлении новых экранов напоминай пользователю обновить массив APP_ROUTES в интерфейсе пульта.
 `;
 
   const fetchRepoStructure = async () => {
@@ -268,9 +292,8 @@ export default function Home() {
     }
   };
 
-  // Обработчики перетаскивания (срабатывают только в режиме "Рука")
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!isPanMode) return; // Если мы в интерактиве - не перехватываем клик
+    if (!isPanMode) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
   };
@@ -295,7 +318,6 @@ export default function Home() {
 
   const codeBlockMarker = '`' + '`' + '`';
 
-  // Физические размеры экранов визора
   const targetWidth = viewMode === 'mobile' ? 390 : 1280;
   const targetHeight = viewMode === 'mobile' ? 844 : 720;
 
@@ -401,72 +423,108 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ПРАВАЯ ЧАСТЬ: Живой Визор с математической камерой */}
+      {/* ПРАВАЯ ЧАСТЬ: Живой Визор с Навигатором и Плавающей Панелью */}
       <div className="w-1/2 h-full bg-[#111] flex flex-col relative overflow-hidden">
         
-        {/* Панель управления визором */}
+        {/* НАВИГАТОР СТРАНИЦ (Верхняя шапка) */}
         <div className="p-3 bg-[#0d0d0d] border-b border-gray-850 flex justify-between items-center z-20 relative shadow-md">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 w-2/3">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
             
-            <div className="flex bg-black border border-gray-800 rounded overflow-hidden">
-              <button 
-                onClick={() => setViewMode('mobile')}
-                className={`px-3 py-1 text-[10px] font-bold uppercase transition-colors ${viewMode === 'mobile' ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
-              >
-                Мобайл
-              </button>
-              <button 
-                onClick={() => setViewMode('desktop')}
-                className={`px-3 py-1 text-[10px] font-bold uppercase border-l border-gray-800 transition-colors ${viewMode === 'desktop' ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
-              >
-                ПК
-              </button>
-            </div>
-
-            {/* ПЕРЕКЛЮЧАТЕЛЬ: Интерактив / Рука */}
-            <div className="flex bg-black border border-gray-800 rounded overflow-hidden">
-              <button 
-                onClick={() => setIsPanMode(false)}
-                className={`px-3 py-1 text-[10px] font-bold uppercase transition-colors ${!isPanMode ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
-                title="Обычный режим: можно нажимать кнопки в приложении"
-              >
-                Интерактив
-              </button>
-              <button 
-                onClick={() => setIsPanMode(true)}
-                className={`px-3 py-1 text-[10px] font-bold uppercase border-l border-gray-800 transition-colors ${isPanMode ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
-                title="Режим перетаскивания (Горячая клавиша: зажать Space)"
-              >
-                Рука [Space]
-              </button>
-            </div>
-            
-            <div className="flex items-center bg-black border border-gray-800 rounded">
-              <button 
-                onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} 
-                className="px-3 py-1 text-gray-500 hover:text-emerald-400 font-bold transition-colors"
-              >−</button>
-              <span className="text-[10px] text-gray-400 font-mono w-12 text-center border-x border-gray-800 py-1">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button 
-                onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} 
-                className="px-3 py-1 text-gray-500 hover:text-emerald-400 font-bold transition-colors border-r border-gray-800"
-              >+</button>
-              <button 
-                onClick={centerView} 
-                className="px-3 py-1 text-emerald-500 hover:text-emerald-300 font-bold transition-colors"
-                title="Вернуть в центр"
-              >⌖</button>
-            </div>
+            {/* Выпадающий список страниц */}
+            <select
+              value={currentRoute}
+              onChange={(e) => setCurrentRoute(e.target.value)}
+              className="bg-black border border-gray-800 text-emerald-400 text-xs font-mono rounded px-2 py-1 outline-none focus:border-emerald-600 cursor-pointer flex-grow"
+            >
+              {APP_ROUTES.map((route, idx) => (
+                <option key={idx} value={route.path}>{route.label} (/{route.path})</option>
+              ))}
+            </select>
           </div>
           
-          <button 
-            onClick={() => setIframeKey(prev => prev + 1)}
-            className="text-[10px] text-gray-400 hover:text-emerald-400 border border-gray-800 px-3 py-1.5 rounded transition-colors uppercase tracking-wider"
-          >
-            Обновить экран
-          </button>
+          <div className="flex items-center gap-2 relative">
+            <button 
+              onClick={handleNextTip}
+              className="text-[10px] text-yellow-500 hover:text-yellow-400 border border-yellow-900/50 hover:bg-yellow-900/20 px-3 py-1.5 rounded transition-colors uppercase tracking-wider flex items-center gap-1 font-bold"
+            >
+              <span>💡</span> Совет ИИ
+            </button>
+            <button 
+              onClick={() => setIframeKey(prev => prev + 1)}
+              className="text-[10px] text-gray-400 hover:text-emerald-400 border border-gray-800 px-3 py-1.5 rounded transition-colors uppercase tracking-wider"
+              title="Перезагрузить окно визора"
+            >
+              Обновить
+            </button>
+
+            {/* Всплывающее окно совета */}
+            {showTip && (
+              <div className="absolute top-10 right-0 w-64 bg-gray-900 border border-yellow-600/50 rounded-lg p-3 shadow-2xl z-50">
+                <div className="flex justify-between items-start mb-1">
+                  <span className="text-yellow-500 text-[10px] font-bold uppercase tracking-widest">База Знаний</span>
+                  <button onClick={() => setShowTip(false)} className="text-gray-500 hover:text-white">✕</button>
+                </div>
+                <p className="text-gray-300 text-xs font-mono leading-relaxed">{ORACLE_TIPS[activeTipIndex]}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ПЛАВАЮЩАЯ ПАНЕЛЬ ИНСТРУМЕНТОВ (Нижний левый угол) */}
+        <div className="absolute bottom-6 left-6 z-40 bg-[#0d0d0d]/90 backdrop-blur-md border border-gray-800 p-2 rounded-xl shadow-2xl flex flex-col gap-2 pointer-events-auto">
+          
+          {/* Режимы Мобайл / ПК */}
+          <div className="flex bg-black border border-gray-800 rounded overflow-hidden">
+            <button 
+              onClick={() => setViewMode('mobile')}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase w-1/2 transition-colors ${viewMode === 'mobile' ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Мобайл
+            </button>
+            <button 
+              onClick={() => setViewMode('desktop')}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase w-1/2 border-l border-gray-800 transition-colors ${viewMode === 'desktop' ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              ПК
+            </button>
+          </div>
+
+          {/* Интерактив / Рука */}
+          <div className="flex bg-black border border-gray-800 rounded overflow-hidden">
+            <button 
+              onClick={() => setIsPanMode(false)}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase w-1/2 transition-colors ${!isPanMode ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Стрелка
+            </button>
+            <button 
+              onClick={() => setIsPanMode(true)}
+              className={`px-3 py-1.5 text-[10px] font-bold uppercase w-1/2 border-l border-gray-800 transition-colors ${isPanMode ? 'bg-emerald-900/50 text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              Рука
+            </button>
+          </div>
+
+          {/* Масштаб */}
+          <div className="flex items-center bg-black border border-gray-800 rounded justify-between">
+            <button 
+              onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} 
+              className="px-3 py-1 text-gray-500 hover:text-emerald-400 font-bold transition-colors"
+            >−</button>
+            <span className="text-[10px] text-gray-400 font-mono text-center py-1">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button 
+              onClick={() => setZoom(z => Math.min(4.0, z + 0.1))} 
+              className="px-3 py-1 text-gray-500 hover:text-emerald-400 font-bold transition-colors"
+            >+</button>
+            <button 
+              onClick={centerView} 
+              className="px-3 py-1 text-emerald-500 hover:text-emerald-300 font-bold transition-colors border-l border-gray-800"
+              title="Вернуть в центр"
+            >⌖</button>
+          </div>
         </div>
 
         {/* ИНТЕРАКТИВНЫЙ ХОЛСТ */}
@@ -477,15 +535,14 @@ export default function Home() {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
         >
-          {/* СТЕКЛО БЕЗОПАСНОСТИ: Появляется только в режиме "Рука", закрывая iframe от случайных кликов */}
-          {isPanMode && <div className="absolute inset-0 z-50 bg-transparent" />}
+          {isPanMode && <div className="absolute inset-0 z-30 bg-transparent" />}
 
           {/* ЯКОРЬ КАМЕРЫ */}
           <div 
-            className="absolute top-1/2 left-1/2" 
+            className="absolute top-1/2 left-1/2 z-10" 
             style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}
           >
-            {/* САМО ПРИЛОЖЕНИЕ */}
+            {/* САМО ПРИЛОЖЕНИЕ С ДИНАМИЧЕСКИМ МАРШРУТОМ */}
             <div
               className={`flex-shrink-0 flex flex-col overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.8)] ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] border-gray-900' : 'bg-black border border-gray-800 rounded-xl'}`}
               style={{
@@ -510,11 +567,11 @@ export default function Home() {
               )}
 
               <iframe
-                key={`${viewMode}-${iframeKey}`}
-                src={LIVE_VIEW_URL}
+                key={`${viewMode}-${currentRoute}-${iframeKey}`}
+                src={`${LIVE_VIEW_URL}${currentRoute}`}
                 className={`w-full flex-grow border-none bg-black ${viewMode === 'mobile' ? 'pt-2' : ''}`}
                 sandbox="allow-scripts allow-same-origin allow-forms"
-                title={`Living Tarot ${viewMode === 'mobile' ? 'Mobile' : 'PC'} Monitor`}
+                title={`Living Tarot Monitor - /${currentRoute}`}
               />
             </div>
           </div>
