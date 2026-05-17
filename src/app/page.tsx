@@ -138,8 +138,11 @@ export default function App() {
   // Метод Зеркала
   useEffect(() => {
     if (!isConnected || files.length === 0) return;
-    const targetPath = currentRoute === "" ? "src/app/page.tsx" : `src/app/${currentRoute}/page.tsx`;
-    const found = files.find(f => f.path === targetPath);
+    // Универсальный поиск: ищем как в src/app, так и просто в app
+    const targetPathSrc = currentRoute === "" ? "src/app/page.tsx" : `src/app/${currentRoute}/page.tsx`;
+    const targetPathApp = currentRoute === "" ? "app/page.tsx" : `app/${currentRoute}/page.tsx`;
+    
+    const found = files.find(f => f.path === targetPathSrc || f.path === targetPathApp);
     if (found && activeFile !== found.path) {
         handleFileClick(found.path);
     }
@@ -155,15 +158,22 @@ export default function App() {
     setAdvice(`💡 Фокус: ${filename}. Опишите, что нужно изменить.`);
   }, [activeFile, isConnected]);
 
-  // Авто-сканер страниц
+  // Авто-сканер страниц (Универсальный: src/app/ и app/)
   useEffect(() => {
     if (files.length === 0) return;
     const generated: RouteEntry[] = [];
     files.forEach(f => {
-      if (f.path.endsWith('page.tsx')) {
-        let route = f.path.replace('src/app/', '').replace('page.tsx', '').replace(/\/$/, '');
-        if (route === '' || route === 'src/app') generated.push({ label: "🏠 Главная", path: "" });
-        else generated.push({ label: `📄 /${route}`, path: route });
+      // Ищем все файлы page.tsx, page.jsx, page.js
+      if (f.path.match(/(^|\/)page\.(tsx|jsx|js)$/)) {
+        let route = f.path.replace(/^src\/app\//, '').replace(/^app\//, '').replace(/\/?page\.[tj]sx?$/, '');
+        if (route === '' || route === 'src/app' || route === 'app') {
+            // Защита от дублей главной страницы
+            if (!generated.find(r => r.path === "")) {
+                generated.push({ label: "🏠 Главная", path: "" });
+            }
+        } else {
+            generated.push({ label: `📄 /${route}`, path: route });
+        }
       }
     });
     setAppRoutes(generated.sort((a,b) => a.path === "" ? -1 : 1));
@@ -206,7 +216,13 @@ export default function App() {
       const content = data.content || '';
       setFileContent(content);
       setOriginalContent(content); // Сохраняем слепок для предохранителя
-      addLog(`Успех: файл загружен (${content.split('\n').length} строк).`, 'success');
+      
+      const linesCount = content.split('\n').length;
+      if (linesCount > 1000) {
+        addLog(`ВНИМАНИЕ: Файл огромный (${linesCount} строк). Если отправить его Оракулу, сервер Vercel может уйти в таймаут (ограничение 10 сек). Будьте осторожны.`, 'error');
+      } else {
+        addLog(`Успех: файл загружен (${linesCount} строк).`, 'success');
+      }
     } catch (e: any) {
       addLog(`Ошибка: ${e.message}`, 'error');
     } finally {
@@ -238,7 +254,7 @@ export default function App() {
       addLog(`Оракул завершил генерацию.`, 'success');
     } catch (e: any) {
       setMessages(prev => [...prev, { role: 'assistant', text: `Сбой: ${e.message}` }]);
-      addLog(`Сбой ИИ: ${e.message}`, 'error');
+      addLog(`Сбой ИИ (Таймаут или ошибка): ${e.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
