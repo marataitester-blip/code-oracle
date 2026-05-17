@@ -18,6 +18,13 @@ interface RouteEntry {
   path: string;
 }
 
+interface LogEntry {
+  id: number;
+  time: string;
+  message: string;
+  type: 'info' | 'success' | 'error' | 'system';
+}
+
 // --- КОМПОНЕНТ FileTree (Компактная навигация) ---
 interface FileTreeProps {
   files: FileEntry[];
@@ -87,6 +94,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   
+  // Телеметрия
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [bufferBlink, setBufferBlink] = useState(false);
+
   // Визор
   const [zoom, setZoom] = useState(0.8);
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>('mobile');
@@ -98,17 +109,25 @@ export default function App() {
   // Маршруты
   const [currentRoute, setCurrentRoute] = useState('');
   const [appRoutes, setAppRoutes] = useState<RouteEntry[]>([{ label: "🏠 Главная", path: "" }]);
-  const [advice, setAdvice] = useState("Оракул готов к анализу. Подключите репозиторий.");
 
   const LIVE_VIEW_URL = "https://living-tarot.vercel.app/";
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Скролл чата
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // Функция добавления логов
+  const addLog = (message: string, type: LogEntry['type'] = 'info') => {
+    const now = new Date();
+    const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+    setLogs(prev => [...prev, { id: Date.now() + Math.random(), time, message, type }]);
+  };
 
-  // МЕТОД ЗЕРКАЛА (Связь Визора и Хроник)
+  useEffect(() => { addLog("Система телеметрии активирована. Ожидание команд.", "system"); }, []);
+
+  // Автоскроллы
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
+
+  // МЕТОД ЗЕРКАЛА
   useEffect(() => {
     if (!isConnected || files.length === 0) return;
     const targetPath = currentRoute === "" ? "src/app/page.tsx" : `src/app/${currentRoute}/page.tsx`;
@@ -117,23 +136,6 @@ export default function App() {
         handleFileClick(found.path);
     }
   }, [currentRoute, isConnected]);
-
-  // Реактивные советы
-  useEffect(() => {
-    if (!isConnected) return;
-    if (!activeFile) {
-      setAdvice("💡 Проект онлайн. Выберите любой файл в Хрониках для анализа.");
-      return;
-    }
-    const filename = activeFile.split('/').pop();
-    if (activeFile.includes('page.tsx')) {
-      setAdvice(`💡 Фокус на визуальном слое: ${filename}. Проверьте геометрию на экране справа.`);
-    } else if (activeFile.includes('route.ts') || activeFile.includes('api/')) {
-      setAdvice(`💡 Фокус на сервере (API): ${filename}. Ошибки здесь могут нарушить связи данных.`);
-    } else {
-      setAdvice(`💡 Фокус на компоненте: ${filename}.`);
-    }
-  }, [activeFile, isConnected]);
 
   // Авто-сканер структуры страниц
   useEffect(() => {
@@ -156,13 +158,13 @@ export default function App() {
       
       if (!res.ok) {
         if (res.status === 405) {
-          throw new Error("Vercel заблокировал запрос (Ошибка 405). Проверьте актуальность серверных обработчиков.");
+          throw new Error("Ошибка 405: Vercel заблокировал запрос. Серверное API устарело.");
         }
         let errorData;
         try { errorData = JSON.parse(text); } catch(e) { errorData = { error: text }; }
-        const errMsg = errorData.error || errorData.message || `Ошибка сервера: ${res.status}`;
+        const errMsg = errorData.error || errorData.message || `Статус ${res.status}`;
         if (errMsg.includes("key") || errMsg.includes("token")) {
-           throw new Error("Проблема авторизации GitHub. Проверьте актуальность токена GITHUB_PAT в Vercel.");
+           throw new Error("Проблема авторизации GitHub. Проверьте GITHUB_PAT.");
         }
         throw new Error(errMsg);
       }
@@ -170,7 +172,7 @@ export default function App() {
       try {
         return JSON.parse(text);
       } catch (e) {
-        throw new Error("Сервер прислал некорректный формат ответа.");
+        throw new Error("Сервер прислал некорректный ответ (не JSON).");
       }
     } catch (e: any) {
       throw new Error(e.message || "Сбой связи с сервером.");
@@ -180,11 +182,13 @@ export default function App() {
   const handleFileClick = async (path: string) => {
     setActiveFile(path);
     setIsLoading(true);
+    addLog(`Запрос на чтение файла: ${path}...`, 'info');
     try {
       const data = await safeFetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
       setFileContent(data.content || '');
+      addLog(`Файл загружен (${(data.content || '').length} байт).`, 'success');
     } catch (e: any) {
-      alert(`Ошибка чтения файла: ${e.message}`);
+      addLog(`Сбой чтения: ${e.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -196,6 +200,7 @@ export default function App() {
     setMessages(prev => [...prev, { role: 'user', text }]);
     setInputMessage('');
     setIsLoading(true);
+    addLog(`Отправка запроса Оракулу...`, 'info');
     try {
       const data = await safeFetch('/api/chat', {
         method: 'POST',
@@ -206,16 +211,28 @@ export default function App() {
         })
       });
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
+      addLog(`Ответ Оракула получен.`, 'success');
     } catch (e: any) {
-      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой Оракула: ${e.message}` }]);
+      setMessages(prev => [...prev, { role: 'assistant', text: `Сбой: ${e.message}` }]);
+      addLog(`Сбой ИИ: ${e.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handlePush = async () => {
-    if (!activeFile) return;
+  const handlePushToGitHub = async () => {
+    if (!activeFile) {
+      addLog("Ошибка: Нет активного файла для материализации.", 'error');
+      return;
+    }
+    if (!fileContent.trim()) {
+      addLog("Ошибка: Буфер пуст. Запись отменена.", 'error');
+      return;
+    }
+    
     setIsLoading(true);
+    addLog(`Запуск PUSH для файла ${activeFile.split('/').pop()}...`, 'system');
+    
     try {
       const data = await safeFetch('/api/files', {
         method: 'POST',
@@ -224,11 +241,11 @@ export default function App() {
       });
       
       if (data.success) {
-        alert('МАТЕРИАЛИЗАЦИЯ УСПЕШНА. Изменения отправлены в GitHub.');
+        addLog(`PUSH выполнен. GitHub принял данные. Ожидание пересборки Vercel.`, 'success');
         setIframeKey(k => k + 1);
       }
     } catch (e: any) {
-      alert(`СБОЙ МАТЕРИАЛИЗАЦИИ: ${e.message}`);
+      addLog(`Критический сбой PUSH: ${e.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -249,14 +266,25 @@ export default function App() {
     return null;
   };
 
+  const applyToBuffer = (code: string) => {
+    setFileContent(code);
+    addLog(`Парсер: Извлечен код (${code.length} символов, ${code.split('\n').length} строк). Перенесен в буфер.`, 'success');
+    
+    // Эффект моргания
+    setBufferBlink(true);
+    setTimeout(() => setBufferBlink(false), 500);
+  };
+
   const handleConnect = async () => {
     setIsLoading(true);
+    addLog(`Попытка подключения к ${owner}/${repo}...`, 'info');
     try {
       const data = await safeFetch(`/api/repo?owner=${owner}&repo=${repo}`);
       setFiles(data);
       setIsConnected(true);
+      addLog(`Соединение установлено. Найдено ${data.length} узлов.`, 'success');
     } catch (e: any) {
-      alert(`Ошибка подключения: ${e.message}`);
+      addLog(`Ошибка подключения: ${e.message}`, 'error');
       setIsConnected(false);
     } finally {
       setIsLoading(false);
@@ -268,6 +296,9 @@ export default function App() {
     setZoom(0.8);
   };
 
+  // Подсчет строк буфера
+  const bufferLinesCount = fileContent ? fileContent.split('\n').length : 0;
+
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
       
@@ -275,7 +306,7 @@ export default function App() {
       <div className="w-1/2 h-full flex flex-col border-r border-gray-850">
         
         {/* Header */}
-        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0 shadow-lg">
+        <div className="h-14 p-3 bg-[#0d0d0d] border-b border-gray-800 flex gap-3 items-center flex-shrink-0 shadow-lg z-10">
           <input type="text" value={repo} onChange={(e) => setRepo(e.target.value)} className="bg-black border border-gray-700 rounded px-3 py-1.5 text-sm text-emerald-400 w-32 outline-none focus:border-emerald-600 transition-all font-mono" />
           <button onClick={handleConnect} disabled={isLoading} className="bg-emerald-950 text-emerald-400 text-[10px] font-bold px-4 py-2 rounded hover:bg-emerald-900 transition-all uppercase tracking-widest font-mono">
             {isLoading ? 'Загрузка...' : 'Подключить проект'}
@@ -308,13 +339,10 @@ export default function App() {
                       {msg.text}
                       {codeToApply && (
                         <button 
-                          onClick={() => { 
-                            setFileContent(codeToApply); 
-                            alert("КОД УСПЕШНО ПЕРЕДАН В БУФЕР МАТЕРИАЛИЗАЦИИ");
-                          }} 
+                          onClick={() => applyToBuffer(codeToApply)} 
                           className="mt-4 block w-full bg-emerald-600 hover:bg-emerald-500 text-black py-3 rounded-xl text-[10px] font-bold uppercase transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] active:scale-95 font-mono"
                         >
-                          Применить код в буфер
+                          Извлечь код в буфер
                         </button>
                       )}
                     </div>
@@ -324,18 +352,13 @@ export default function App() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Блок Реактивного Совета */}
-            <div className="mx-3 mb-1 p-2 bg-yellow-950/5 border border-yellow-900/20 rounded-md text-[10px] text-yellow-600/80 font-mono italic shadow-inner">
-              {advice}
-            </div>
-
             {/* Ввод */}
-            <div className="p-4 bg-[#0d0d0d] border-t border-gray-800 shadow-2xl">
+            <div className="p-4 bg-[#0d0d0d] border-t border-gray-800 shadow-2xl z-10">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Опишите задачу (например: 'Поправь навигацию в Живом Таро')..."
-                className="w-full p-4 bg-black border border-gray-800 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-40 text-gray-200 no-scrollbar shadow-inner placeholder:text-gray-800 font-mono leading-relaxed"
+                placeholder="Опишите задачу..."
+                className="w-full p-4 bg-black border border-gray-800 rounded-xl text-lg outline-none focus:border-emerald-600 resize-none h-32 text-gray-200 no-scrollbar shadow-inner placeholder:text-gray-800 font-mono leading-relaxed"
               />
               <div className="flex justify-between items-center mt-3">
                  <span className="text-[9px] text-yellow-600/50 font-mono truncate max-w-[50%] italic select-none">
@@ -347,26 +370,52 @@ export default function App() {
           </div>
         </div>
 
+        {/* ТЕЛЕМЕТРИЯ (Системный журнал) */}
+        <div className="h-24 border-t border-gray-800 bg-[#030303] flex flex-col z-20">
+            <div className="px-4 py-1 border-b border-gray-800/50 flex justify-between bg-[#080808]">
+                <span className="text-[8px] text-gray-600 uppercase font-bold tracking-widest font-mono">Терминал</span>
+            </div>
+            <div className="flex-grow p-2 overflow-y-auto no-scrollbar font-mono text-[9px] space-y-1">
+                {logs.map((log) => (
+                    <div key={log.id} className="flex gap-2">
+                        <span className="text-gray-600">[{log.time}]</span>
+                        <span className={`
+                            ${log.type === 'info' ? 'text-gray-400' : ''}
+                            ${log.type === 'success' ? 'text-emerald-500 font-bold' : ''}
+                            ${log.type === 'error' ? 'text-red-500 font-bold' : ''}
+                            ${log.type === 'system' ? 'text-blue-400 italic' : ''}
+                        `}>{log.message}</span>
+                    </div>
+                ))}
+                <div ref={logsEndRef} />
+            </div>
+        </div>
+
         {/* БУФЕР (Нижняя часть) */}
-        <div className="h-36 border-t border-gray-800 flex flex-col bg-black">
-          <div className="px-4 py-1.5 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center shadow-md">
-            <span className="text-[9px] text-gray-600 uppercase font-bold tracking-widest font-mono">Буфер материализации</span>
+        <div className="h-40 border-t border-gray-800 flex flex-col bg-black z-20">
+          <div className="px-4 py-2 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center shadow-md">
+            <div className="flex items-center gap-4">
+               <span className="text-[10px] text-emerald-600 uppercase font-bold tracking-widest font-mono">Буфер материализации</span>
+               {fileContent && <span className="text-[9px] font-mono text-gray-500 border border-gray-800 rounded px-2 py-0.5">{bufferLinesCount} строк | {fileContent.length} симв.</span>}
+            </div>
             {activeFile && (
               <button 
-                onClick={handlePush} 
+                onClick={handlePushToGitHub} 
                 disabled={isLoading}
-                className="bg-emerald-950 hover:bg-emerald-800 text-emerald-500 font-bold text-[9px] px-3 py-1 rounded border border-emerald-900 transition-all animate-pulse disabled:opacity-50 font-mono"
+                className="bg-emerald-950 hover:bg-emerald-800 text-emerald-400 font-bold text-[9px] px-4 py-1.5 rounded border border-emerald-900 transition-all active:scale-95 disabled:opacity-50 font-mono shadow-[0_0_15px_rgba(16,185,129,0.1)]"
               >
-                {isLoading ? 'ПРОЦЕСС...' : 'МАТЕРИАЛИЗОВАТЬ (PUSH)'}
+                {isLoading ? 'ПРОЦЕСС...' : 'PUSH В GITHUB'}
               </button>
             )}
           </div>
-          <textarea 
-            value={fileContent} 
-            onChange={(e) => setFileContent(e.target.value)} 
-            className="flex-grow p-3 bg-[#030303] text-gray-500 font-mono text-[9px] outline-none resize-none no-scrollbar cursor-default leading-tight" 
-            placeholder="Ожидание кода..."
-          />
+          <div className={`flex-grow relative transition-colors duration-500 ${bufferBlink ? 'bg-emerald-900/40' : 'bg-[#030303]'}`}>
+            <textarea 
+              value={fileContent} 
+              onChange={(e) => setFileContent(e.target.value)} 
+              className="absolute inset-0 w-full h-full p-4 bg-transparent text-gray-400 font-mono text-[10px] outline-none resize-none no-scrollbar leading-tight" 
+              placeholder="Ожидание кода из Оракула..."
+            />
+          </div>
         </div>
       </div>
 
