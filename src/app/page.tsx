@@ -88,7 +88,10 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  
   const [fileContent, setFileContent] = useState<string>('');
+  const [originalContent, setOriginalContent] = useState<string>(''); // Предохранитель идентичности
+  
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -182,7 +185,9 @@ export default function App() {
     addLog(`Чтение: ${path}...`, 'info');
     try {
       const data = await safeFetch(`/api/files?owner=${owner}&repo=${repo}&path=${path}`);
-      setFileContent(data.content || '');
+      const content = data.content || '';
+      setFileContent(content);
+      setOriginalContent(content); // Сохраняем слепок для предохранителя
       addLog(`Успех: файл загружен.`, 'success');
     } catch (e: any) {
       addLog(`Ошибка: ${e.message}`, 'error');
@@ -222,6 +227,12 @@ export default function App() {
       addLog("Ошибка: Буфер пуст или файл не выбран.", 'error');
       return;
     }
+
+    // ПРЕДОХРАНИТЕЛЬ ИДЕНТИЧНОСТИ КОДА
+    if (fileContent === originalContent) {
+      addLog("Сбой: Код в буфере полностью совпадает с оригиналом. Нет изменений для отправки в GitHub.", 'error');
+      return;
+    }
     
     setIsLoading(true);
     addLog(`PUSH: Отправка файла ${activeFile.split('/').pop()} в ветку main...`, 'system');
@@ -239,6 +250,7 @@ export default function App() {
            addLog(`Ссылка на коммит: ${data.commit_url}`, 'system');
         }
         addLog(`Ожидание пересборки Живого Таро на Vercel (1-2 мин)...`, 'info');
+        setOriginalContent(fileContent); // Обновляем оригинал после успешного пуша
         setTimeout(() => setIframeKey(k => k + 1), 5000); 
       }
     } catch (e: any) {
@@ -248,11 +260,12 @@ export default function App() {
     }
   };
 
-  // Умный парсер: Ищет самый большой блок кода, игнорируя мусор
+  // Безопасный парсер без регулярных выражений
   const extractCodeFromText = (text: string) => {
     if (!text.includes('```')) return null;
     const firstIndex = text.indexOf('```');
     const lastIndex = text.lastIndexOf('```');
+    
     if (firstIndex !== lastIndex && firstIndex !== -1) {
       let code = text.substring(firstIndex + 3, lastIndex);
       const firstLineEnd = code.indexOf('\n');
@@ -294,6 +307,7 @@ export default function App() {
   };
 
   const bufferLinesCount = fileContent ? fileContent.split('\n').length : 0;
+  const isChanged = fileContent !== originalContent && originalContent !== '';
 
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
@@ -397,13 +411,21 @@ export default function App() {
           <div className="px-4 py-2 bg-[#0d0d0d] border-b border-gray-800 flex justify-between items-center shadow-md">
             <div className="flex items-center gap-4">
                <span className="text-[10px] text-emerald-600 uppercase font-bold tracking-widest font-mono">Буфер</span>
-               {fileContent && <span className="text-[9px] font-mono text-gray-500 border border-gray-800 rounded px-2 py-0.5">{bufferLinesCount} строк</span>}
+               {fileContent && (
+                  <span className={`text-[9px] font-mono border rounded px-2 py-0.5 transition-colors ${isChanged ? 'text-yellow-400 border-yellow-800/50' : 'text-gray-500 border-gray-800'}`}>
+                    {bufferLinesCount} строк {isChanged ? '(Изменено)' : '(Оригинал)'}
+                  </span>
+               )}
             </div>
             {activeFile && (
               <button 
                 onClick={handlePushToGitHub} 
-                disabled={isLoading}
-                className="bg-emerald-950 hover:bg-emerald-800 text-emerald-400 font-bold text-[9px] px-4 py-1.5 rounded border border-emerald-900 transition-all active:scale-95 disabled:opacity-50 font-mono shadow-[0_0_15px_rgba(16,185,129,0.1)]"
+                disabled={isLoading || !isChanged}
+                className={`font-bold text-[9px] px-4 py-1.5 rounded border transition-all font-mono shadow-[0_0_15px_rgba(16,185,129,0.1)] ${
+                  isChanged 
+                    ? 'bg-emerald-950 hover:bg-emerald-800 text-emerald-400 border-emerald-900 active:scale-95' 
+                    : 'bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed'
+                }`}
               >
                 {isLoading ? 'ПРОЦЕСС...' : 'PUSH В GITHUB'}
               </button>
@@ -468,10 +490,10 @@ export default function App() {
           {isPanMode && <div className="absolute inset-0 z-30 bg-transparent" />}
           <div className="absolute top-1/2 left-1/2" style={{ transform: `translate(${pan.x}px, ${pan.y}px)` }}>
             <div 
-              className={`flex flex-col shadow-[0_0_120px_rgba(0,0,0,0.9)] border-[#1a1a1a] transition-all duration-300 ${viewMode === 'mobile' ? 'bg-black rounded-[3rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[2px] rounded-2xl w-[1280px] h-[720px]'}`} 
+              className={`flex flex-col shadow-[0_0_120px_rgba(0,0,0,0.9)] border-[#1a1a1a] transition-all duration-300 ${viewMode === 'mobile' ? 'bg-black rounded-[3.5rem] border-[12px] w-[390px] h-[844px]' : 'bg-black border-[2px] rounded-2xl w-[1280px] h-[720px]'}`} 
               style={{ transform: `translate(-50%, -50%) scale(${zoom})`, position: 'absolute' }}
             >
-              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none"><div className="w-36 h-6 bg-[#0a0a0a] rounded-b-3xl border-x border-b border-white/5 shadow-2xl"></div></div>}
+              {viewMode === 'mobile' && <div className="absolute top-0 inset-x-0 h-6 flex justify-center z-20 pointer-events-none"><div className="w-36 h-6 bg-[#0a0a0a] rounded-b-3xl border-x border-b border-white/5 shadow-2xl font-mono"></div></div>}
               <iframe 
                 key={`${viewMode}-${currentRoute}-${iframeKey}`} 
                 src={`${LIVE_VIEW_URL}${currentRoute}`} 
