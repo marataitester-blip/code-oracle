@@ -118,6 +118,12 @@ export default function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
+  // Вычисляемые метрики
+  const bufferLinesCount = fileContent ? fileContent.split('\n').length : 0;
+  const isChanged = fileContent !== originalContent && originalContent !== '';
+  // ПРЕДОХРАНИТЕЛЬ: Если код обрезали больше чем в 2 раза
+  const isSuspiciouslySmall = originalContent && fileContent.length > 0 && fileContent.length < originalContent.length * 0.5;
+
   // Логирование (Телеметрия)
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     const now = new Date();
@@ -169,11 +175,23 @@ export default function App() {
       const text = await res.text();
       
       if (!res.ok) {
+        if (res.status === 405) {
+          throw new Error("Vercel заблокировал запрос (Ошибка 405). Проверьте актуальность серверных обработчиков.");
+        }
         let errorData;
         try { errorData = JSON.parse(text); } catch(e) { errorData = { error: text }; }
-        throw new Error(errorData.error || errorData.message || `Статус ${res.status}`);
+        const errMsg = errorData.error || errorData.message || `Ошибка сервера: ${res.status}`;
+        if (errMsg.includes("key") || errMsg.includes("token")) {
+           throw new Error("Проблема авторизации GitHub. Проверьте актуальность токена GITHUB_PAT в Vercel.");
+        }
+        throw new Error(errMsg);
       }
-      return JSON.parse(text);
+
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error("Сервер прислал некорректный формат ответа.");
+      }
     } catch (e: any) {
       throw new Error(e.message || "Сбой связи с сервером.");
     }
@@ -188,7 +206,7 @@ export default function App() {
       const content = data.content || '';
       setFileContent(content);
       setOriginalContent(content); // Сохраняем слепок для предохранителя
-      addLog(`Успех: файл загружен.`, 'success');
+      addLog(`Успех: файл загружен (${content.split('\n').length} строк).`, 'success');
     } catch (e: any) {
       addLog(`Ошибка: ${e.message}`, 'error');
     } finally {
@@ -203,13 +221,17 @@ export default function App() {
     setInputMessage('');
     setIsLoading(true);
     addLog(`Запрос Оракулу отправлен...`, 'info');
+    
+    // ЖЕСТКАЯ ДИРЕКТИВА: Принуждаем ИИ выдавать полный код
+    const enforcedPrompt = `Файл: ${activeFile || 'Нет'}\nЗапрос: ${text}\n\n[СИСТЕМНАЯ ДИРЕКТИВА ИНЖЕНЕРА]: Ты ОБЯЗАН вернуть ПОЛНЫЙ, рабочий код файла от начала до конца. Категорически запрещены любые сокращения, плейсхолдеры и фразы "...остальной код...". Код идет напрямую в компилятор Vercel, если ты его обрежешь - сайт сломается.`;
+
     try {
       const data = await safeFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Файл: ${activeFile || 'Нет'}\nЗапрос: ${text}`,
-          fileContext: activeFile ? { path: activeFile, content: fileContent } : null
+          prompt: enforcedPrompt,
+          fileContext: activeFile ? { path: activeFile, content: originalContent } : null
         })
       });
       setMessages(prev => [...prev, { role: 'assistant', text: data.response }]);
@@ -228,10 +250,14 @@ export default function App() {
       return;
     }
 
-    // ПРЕДОХРАНИТЕЛЬ ИДЕНТИЧНОСТИ КОДА
     if (fileContent === originalContent) {
-      addLog("Сбой: Код в буфере полностью совпадает с оригиналом. Нет изменений для отправки в GitHub.", 'error');
+      addLog("Сбой: Код в буфере полностью совпадает с оригиналом. Нет изменений для отправки.", 'error');
       return;
+    }
+
+    if (isSuspiciouslySmall) {
+       addLog("КРИТИЧЕСКИЙ СБОЙ: Попытка отправить обрубленный файл заблокирована предохранителем.", 'error');
+       return;
     }
     
     setIsLoading(true);
@@ -245,12 +271,12 @@ export default function App() {
       });
       
       if (data.success) {
-        addLog(`УСПЕХ! GitHub подтвердил запись.`, 'success');
+        addLog(`УСПЕХ! GitHub принял изменения.`, 'success');
         if (data.commit_url) {
            addLog(`Ссылка на коммит: ${data.commit_url}`, 'system');
         }
-        addLog(`Ожидание пересборки Живого Таро на Vercel (1-2 мин)...`, 'info');
-        setOriginalContent(fileContent); // Обновляем оригинал после успешного пуша
+        addLog(`Запущена сборка "Живого Таро". Открой дашборд Vercel проекта Living-Tarot, чтобы следить за процессом (около 1 минуты).`, 'info');
+        setOriginalContent(fileContent); 
         setTimeout(() => setIframeKey(k => k + 1), 5000); 
       }
     } catch (e: any) {
@@ -260,7 +286,7 @@ export default function App() {
     }
   };
 
-  // Безопасный парсер без регулярных выражений
+  // Безопасный парсер
   const extractCodeFromText = (text: string) => {
     if (!text.includes('```')) return null;
     const firstIndex = text.indexOf('```');
@@ -279,7 +305,13 @@ export default function App() {
 
   const applyToBuffer = (code: string) => {
     setFileContent(code);
-    addLog(`Код успешно извлечен и помещен в буфер (${code.split('\n').length} строк).`, 'success');
+    
+    const lines = code.split('\n').length;
+    if (originalContent && lines < originalContent.split('\n').length * 0.5) {
+       addLog(`ВНИМАНИЕ! ИИ выдал "огрызок" кода (${lines} строк вместо ${originalContent.split('\n').length}). Предохранитель активирован. Повтори запрос.`, 'error');
+    } else {
+       addLog(`Код успешно извлечен и помещен в буфер (${lines} строк).`, 'success');
+    }
     
     setBufferBlink(true);
     setTimeout(() => setBufferBlink(false), 500);
@@ -305,9 +337,6 @@ export default function App() {
     setPan({ x: 0, y: 0 });
     setZoom(0.8);
   };
-
-  const bufferLinesCount = fileContent ? fileContent.split('\n').length : 0;
-  const isChanged = fileContent !== originalContent && originalContent !== '';
 
   return (
     <div className="flex h-screen w-screen bg-[#050505] text-gray-200 overflow-hidden font-sans no-scrollbar">
@@ -412,22 +441,26 @@ export default function App() {
             <div className="flex items-center gap-4">
                <span className="text-[10px] text-emerald-600 uppercase font-bold tracking-widest font-mono">Буфер</span>
                {fileContent && (
-                  <span className={`text-[9px] font-mono border rounded px-2 py-0.5 transition-colors ${isChanged ? 'text-yellow-400 border-yellow-800/50' : 'text-gray-500 border-gray-800'}`}>
-                    {bufferLinesCount} строк {isChanged ? '(Изменено)' : '(Оригинал)'}
+                  <span className={`text-[9px] font-mono border rounded px-2 py-0.5 transition-colors ${
+                    isSuspiciouslySmall ? 'text-red-400 border-red-800/50 bg-red-950/30' :
+                    isChanged ? 'text-yellow-400 border-yellow-800/50' : 
+                    'text-gray-500 border-gray-800'
+                  }`}>
+                    {bufferLinesCount} строк {isSuspiciouslySmall ? '⚠️ ОБРЕЗАНО ИИ!' : isChanged ? '(Изменено)' : '(Оригинал)'}
                   </span>
                )}
             </div>
             {activeFile && (
               <button 
                 onClick={handlePushToGitHub} 
-                disabled={isLoading || !isChanged}
+                disabled={isLoading || !isChanged || isSuspiciouslySmall}
                 className={`font-bold text-[9px] px-4 py-1.5 rounded border transition-all font-mono shadow-[0_0_15px_rgba(16,185,129,0.1)] ${
-                  isChanged 
+                  isChanged && !isSuspiciouslySmall
                     ? 'bg-emerald-950 hover:bg-emerald-800 text-emerald-400 border-emerald-900 active:scale-95' 
                     : 'bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed'
                 }`}
               >
-                {isLoading ? 'ПРОЦЕСС...' : 'PUSH В GITHUB'}
+                {isLoading ? 'ПРОЦЕСС...' : isSuspiciouslySmall ? 'БЛОКИРОВКА ПУША' : 'PUSH В GITHUB'}
               </button>
             )}
           </div>
