@@ -2,39 +2,94 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
-  const { prompt, fileContext } = await request.json();
-  // Используем ключ, который ты добавил в Vercel
-  const apiKey = process.env.OPENROUTER_API_KEY || ""; 
+const GITHUB_API = "https://api.github.com/repos";
 
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Gemini API Key is missing in Vercel' }, { status: 500 });
+// GET: Безопасное чтение содержимого файла из GitHub
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const owner = searchParams.get('owner');
+  const repo = searchParams.get('repo');
+  const path = searchParams.get('path');
+  const token = process.env.GITHUB_PAT;
+
+  if (!owner || !repo || !path || !token) {
+    return NextResponse.json({ 
+      error: 'Отсутствуют обязательные параметры (owner, repo, path) или не настроен GITHUB_PAT в Vercel.' 
+    }, { status: 400 });
   }
 
-  const contextMessage = fileContext 
-    ? `\nТЕКУЩИЙ КОД ФАЙЛА (${fileContext.path}):\n${fileContext.content}\n` 
-    : "";
+  try {
+    const res = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}`, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Code-Oracle-App'
+      }
+    });
 
-  const systemInstruction = `Вы — Code Oracle. 
-Помогайте инженеру в разработке "Живого Таро". 
-Выдавайте код ТОЛЬКО ПОЛНЫМИ ФАЙЛАМИ. 
-Никаких сокращений и комментариев вместо кода.`;
+    const data = await res.json();
+    
+    if (!res.ok) {
+      return NextResponse.json({ 
+        error: data.message || `GitHub вернул статус ${res.status}` 
+      }, { status: res.status });
+    }
+
+    const content = Buffer.from(data.content, 'base64').toString('utf8');
+    return NextResponse.json({ content, sha: data.sha });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// POST: Запись (материализация) изменений в GitHub
+export async function POST(request: Request) {
+  const token = process.env.GITHUB_PAT;
+
+  if (!token) {
+    return NextResponse.json({ error: 'Критическая ошибка: токен GITHUB_PAT отсутствует в переменных окружения Vercel.' }, { status: 500 });
+  }
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const { owner, repo, path, content } = await request.json();
+
+    if (!owner || !repo || !path) {
+      return NextResponse.json({ error: 'Переданы неполные данные для записи.' }, { status: 400 });
+    }
+
+    // Шаг 1: Получаем актуальный SHA файла
+    const getRes = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}`, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Code-Oracle-App'
+      }
+    });
+    
+    const getData = await getRes.json();
+    const sha = getRes.ok ? getData.sha : undefined;
+
+    // Шаг 2: Отправляем коммит в GitHub
+    const putRes = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Code-Oracle-App'
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: contextMessage + prompt }] }],
-        systemInstruction: { parts: [{ text: systemInstruction }] }
+        message: `Oracle Update: ${path}`,
+        content: Buffer.from(content).toString('base64'),
+        sha: sha
       })
     });
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'Gemini Error');
+    if (!putRes.ok) {
+      const errData = await putRes.json();
+      return NextResponse.json({ error: errData.message || 'Не удалось отправить PUSH в репозиторий.' }, { status: putRes.status });
+    }
 
-    const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Оракул задумался...";
-    return NextResponse.json({ response: aiText });
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
