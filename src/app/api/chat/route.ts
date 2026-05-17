@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Увеличиваем лимит времени выполнения до 60 секунд
 
 export async function POST(request: Request) {
   const { prompt, fileContext } = await request.json();
