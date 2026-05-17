@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const GITHUB_API = "https://api.github.com/repos";
 
-// GET: Безопасное чтение содержимого файла из GitHub
+// GET: Безопасное чтение содержимого файла (без кэша)
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const owner = searchParams.get('owner');
@@ -14,25 +14,24 @@ export async function GET(request: Request) {
 
   if (!owner || !repo || !path || !token) {
     return NextResponse.json({ 
-      error: 'Отсутствуют обязательные параметры (owner, repo, path) или не настроен GITHUB_PAT в Vercel.' 
+      error: 'Отсутствуют параметры или токен GITHUB_PAT.' 
     }, { status: 400 });
   }
 
   try {
-    const res = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}`, {
+    const res = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}?ref=main`, {
       headers: {
         'Authorization': `token ${token}`,
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Code-Oracle-App'
-      }
+      },
+      cache: 'no-store' // Жесткий запрет кэширования
     });
 
     const data = await res.json();
     
     if (!res.ok) {
-      return NextResponse.json({ 
-        error: data.message || `GitHub вернул статус ${res.status}` 
-      }, { status: res.status });
+      return NextResponse.json({ error: data.message }, { status: res.status });
     }
 
     const content = Buffer.from(data.content, 'base64').toString('utf8');
@@ -42,34 +41,35 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: Запись (материализация) изменений в GitHub
+// POST: Запись изменений строго в ветку main
 export async function POST(request: Request) {
   const token = process.env.GITHUB_PAT;
 
   if (!token) {
-    return NextResponse.json({ error: 'Критическая ошибка: токен GITHUB_PAT отсутствует в переменных окружения Vercel.' }, { status: 500 });
+    return NextResponse.json({ error: 'Токен GITHUB_PAT отсутствует.' }, { status: 500 });
   }
 
   try {
     const { owner, repo, path, content } = await request.json();
 
     if (!owner || !repo || !path) {
-      return NextResponse.json({ error: 'Переданы неполные данные для записи.' }, { status: 400 });
+      return NextResponse.json({ error: 'Переданы неполные данные.' }, { status: 400 });
     }
 
-    // Шаг 1: Получаем актуальный SHA файла
-    const getRes = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}`, {
+    // 1. Получаем актуальный SHA (строго из main, без кэша)
+    const getRes = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}?ref=main`, {
       headers: {
         'Authorization': `token ${token}`,
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Code-Oracle-App'
-      }
+      },
+      cache: 'no-store'
     });
     
     const getData = await getRes.json();
     const sha = getRes.ok ? getData.sha : undefined;
 
-    // Шаг 2: Отправляем коммит в GitHub
+    // 2. Отправляем коммит (строго в main)
     const putRes = await fetch(`${GITHUB_API}/${owner}/${repo}/contents/${path}`, {
       method: 'PUT',
       headers: {
@@ -80,16 +80,23 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         message: `Oracle Update: ${path}`,
         content: Buffer.from(content).toString('base64'),
-        sha: sha
+        sha: sha,
+        branch: 'main' // Жесткая привязка к ветке Vercel
       })
     });
 
     if (!putRes.ok) {
       const errData = await putRes.json();
-      return NextResponse.json({ error: errData.message || 'Не удалось отправить PUSH в репозиторий.' }, { status: putRes.status });
+      return NextResponse.json({ error: errData.message || 'Сбой PUSH.' }, { status: putRes.status });
     }
 
-    return NextResponse.json({ success: true });
+    const putData = await putRes.json();
+    
+    // Возвращаем успех и точную ссылку на коммит для нашего журнала
+    return NextResponse.json({ 
+      success: true, 
+      commit_url: putData.commit?.html_url 
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
