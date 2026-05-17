@@ -73,9 +73,43 @@ const FileTree: React.FC<FileTreeProps> = ({ files, onFileClick, activeFile }) =
     );
   };
 
+  const handleExportMap = () => {
+    const mapText = files.map(f => f.path).sort().join('\n');
+    if (!mapText) {
+      alert("Карта пуста. Сначала подключите репозиторий.");
+      return;
+    }
+    
+    // Надежное копирование в буфер обмена
+    try {
+      navigator.clipboard.writeText(mapText).then(() => {
+        alert("Карта архитектуры успешно скопирована в буфер обмена!");
+      }).catch(err => {
+        throw err; // Переход к запасному варианту
+      });
+    } catch (e) {
+      const textArea = document.createElement("textarea");
+      textArea.value = mapText;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textArea);
+      alert("Карта архитектуры успешно скопирована в буфер обмена!");
+    }
+  };
+
   return (
     <div className="w-full h-full bg-[#080808] p-4 overflow-y-auto no-scrollbar">
-      <h2 className="text-sm font-bold text-gray-700 uppercase tracking-widest mb-4 select-none italic opacity-50 font-mono">Архитектура Проекта</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-sm font-bold text-gray-700 uppercase tracking-widest select-none italic opacity-50 font-mono">Архитектура Проекта</h2>
+        <button 
+          onClick={handleExportMap}
+          className="text-[10px] text-emerald-600 hover:text-emerald-400 font-bold uppercase transition-colors"
+          title="Скопировать структуру файлов в буфер обмена"
+        >
+          📋 Экспорт
+        </button>
+      </div>
       {justFiles.length > 0 ? renderTree('', justFiles) : <p className="text-gray-800 text-sm font-mono">Ожидание репозитория...</p>}
     </div>
   );
@@ -238,8 +272,11 @@ export default function App() {
     setIsLoading(true);
     addLog(`Запрос Оракулу отправлен...`, 'info');
     
-    // ЖЕСТКАЯ ДИРЕКТИВА: Принуждаем ИИ выдавать полный код
-    const enforcedPrompt = `Файл: ${activeFile || 'Нет'}\nЗапрос: ${text}\n\n[СИСТЕМНАЯ ДИРЕКТИВА ИНЖЕНЕРА]: Ты ОБЯЗАН вернуть ПОЛНЫЙ, рабочий код файла от начала до конца. Категорически запрещены любые сокращения, плейсхолдеры и фразы "...остальной код...". Код идет напрямую в компилятор Vercel, если ты его обрежешь - сайт сломается.`;
+    // Подготовка полной карты архитектуры для передачи ИИ
+    const architectureMap = files.length > 0 ? files.map(f => f.path).join('\n') : "Нет данных об архитектуре";
+
+    // ЖЕСТКАЯ ДИРЕКТИВА: Принуждаем ИИ выдавать полный код и скармливаем ему карту
+    const enforcedPrompt = `[АРХИТЕКТУРА ПРОЕКТА]:\n${architectureMap}\n\nФайл: ${activeFile || 'Нет'}\nЗапрос: ${text}\n\n[СИСТЕМНАЯ ДИРЕКТИВА ИНЖЕНЕРА]: Ты ОБЯЗАН вернуть ПОЛНЫЙ, рабочий код файла от начала до конца. Категорически запрещены любые сокращения, плейсхолдеры и фразы "...остальной код...". Код идет напрямую в компилятор Vercel, если ты его обрежешь - сайт сломается. Если инженер просит найти что-то в проекте, используй карту архитектуры выше.`;
 
     try {
       const data = await safeFetch('/api/chat', {
