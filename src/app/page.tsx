@@ -121,8 +121,8 @@ export default function App() {
   // Вычисляемые метрики
   const bufferLinesCount = fileContent ? fileContent.split('\n').length : 0;
   const isChanged = fileContent !== originalContent && originalContent !== '';
-  // ПРЕДОХРАНИТЕЛЬ: Если код обрезали больше чем в 2 раза
-  const isSuspiciouslySmall = originalContent && fileContent.length > 0 && fileContent.length < originalContent.length * 0.5;
+  // ПРЕДОХРАНИТЕЛЬ: Жесткое преобразование в Boolean для компилятора TypeScript
+  const isSuspiciouslySmall = Boolean(originalContent && fileContent.length > 0 && fileContent.length < originalContent.length * 0.5);
 
   // Логирование (Телеметрия)
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
@@ -502,7 +502,7 @@ export default function App() {
           </div>
           <div className="flex bg-black border border-gray-800 rounded-lg overflow-hidden p-0.5 shadow-inner">
             <button onClick={() => setIsPanMode(false)} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase transition-all ${!isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600 hover:text-gray-400'}`}>Курсор</button>
-            <button onClick={() => setIsPanMode(true)} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase border-l border-gray-800 transition-all ${isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600 hover:text-gray-400'}`}>Рука</button>
+            <button onClick={() => setIsPanMode(true)} className={`flex-grow px-3 py-1 text-[8px] font-bold uppercase border-l border-gray-800 transition-all ${isPanMode ? 'bg-emerald-900/60 text-emerald-400' : 'text-gray-600 hover:text-gray-400'}`}>Рука [Spc]</button>
           </div>
           <div className="flex items-center justify-between px-2 bg-black rounded-xl border border-gray-800 h-8 shadow-inner">
             <button onClick={() => setZoom(z => Math.max(0.3, z - 0.1))} className="text-gray-600 hover:text-white px-2 transition-colors font-bold">-</button>
