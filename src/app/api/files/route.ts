@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Увеличиваем лимит времени выполнения до 60 секунд
 
 const GITHUB_API = "https://api.github.com/repos";
 
